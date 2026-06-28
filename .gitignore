@@ -1,0 +1,81 @@
+# =========================
+# Rust / Cargo
+# =========================
+
+# Build output
+/target/
+debug/
+
+# Backup files from rustfmt
+**/*.rs.bk
+
+# Debug symbols (MSVC)
+*.pdb
+
+# Mutation testing (cargo-mutants)
+**/mutants.out*/
+
+
+# =========================
+# macOS
+# =========================
+
+# Finder metadata
+.DS_Store
+
+# Spotlight / indexing
+.Spotlight-V100
+.Trashes
+
+# Resource fork files
+._*
+
+# =========================
+# Agents
+# =========================
+.claude
+CLAUDE.md
+
+# =========================
+# Editors / IDEs
+# =========================
+
+# JetBrains
+.idea/
+
+# VSCode
+.vscode/
+
+# Zed
+.zed/
+
+# Vim
+*.swp
+*.swo
+
+# Emacs
+*~
+
+
+# =========================
+# Logs / temp
+# =========================
+
+*.log
+tmp/
+temp/
+
+
+# =========================
+# Misc
+# =========================
+
+# Text files
+*.txt
+
+# Environment files
+.env
+.env.*
+
+# OS-generated files
+Thumbs.db
