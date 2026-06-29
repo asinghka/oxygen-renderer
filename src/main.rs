@@ -1,36 +1,45 @@
-use ash_bootstrap::InstanceBuilder;
+use std::sync::Arc;
+use ash::vk;
+use ash_bootstrap::{Instance, InstanceBuilder};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::{Window, WindowId};
 
-fn init_window(event_loop: &ActiveEventLoop) -> anyhow::Result<Window> {
-    let window = event_loop.create_window(Window::default_attributes())?;
-
-    let window_handle = window.window_handle()?;
-    let display_handle = window.display_handle()?;
-
-    let _instance = InstanceBuilder::new(Some((window_handle, display_handle)))
-        .app_name("Vulkan Renderer")
-        .request_validation_layers(true)
-        .use_default_debug_messenger()
-        .build()?;
-
-    Ok(window)
-}
-
 #[derive(Default)]
 struct App {
     window: Option<Window>,
+    instance: Option<Arc<Instance>>,
+}
+
+impl App {
+    fn init_window(&mut self, event_loop: &ActiveEventLoop) -> anyhow::Result<()> {
+        let window = event_loop.create_window(Window::default_attributes())?;
+
+        if self.instance.is_none() {
+            let window_handle = window.window_handle()?;
+            let display_handle = window.display_handle()?;
+
+            let instance = InstanceBuilder::new(Some((window_handle, display_handle)))
+                .app_name("Vulkan Renderer")
+                .require_api_version(vk::API_VERSION_1_3)
+                .request_validation_layers(!cfg!(debug_assertions))
+                .use_default_debug_messenger()
+                .build()?;
+            self.instance = Some(instance);
+        }
+
+        self.window = Some(window);
+
+        Ok(())
+    }
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        match init_window(event_loop) {
-            Ok(window) => {
-                self.window = Some(window);
-            }
+        match self.init_window(event_loop) {
+            Ok(_) => {}
             Err(err) => {
                 panic!("{:?}", err);
             }
@@ -47,11 +56,19 @@ impl ApplicationHandler for App {
     }
 }
 
+impl Drop for App {
+    fn drop(&mut self) {
+        if let Some(instance) = self.instance.take() {
+            instance.destroy();
+        }
+    }
+}
+
 fn main() {
     let event_loop = EventLoop::new().unwrap();
 
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = App::default();
-    let _ = event_loop.run_app(&mut app);
+    event_loop.run_app(&mut app).unwrap();
 }
