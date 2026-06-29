@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use ash::vk;
 use ash_bootstrap::{Instance, InstanceBuilder};
+use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -17,6 +17,8 @@ impl App {
     fn init_window(&mut self, event_loop: &ActiveEventLoop) -> anyhow::Result<()> {
         let window = event_loop.create_window(Window::default_attributes())?;
 
+        // ash-bootstrap welds the window's surface into the instance, so we build it only once and
+        // never on a second `resumed`; safe only because desktop (mac/Windows) fires `resumed` once.
         if self.instance.is_none() {
             let window_handle = window.window_handle()?;
             let display_handle = window.display_handle()?;
@@ -24,7 +26,7 @@ impl App {
             let instance = InstanceBuilder::new(Some((window_handle, display_handle)))
                 .app_name("Vulkan Renderer")
                 .require_api_version(vk::API_VERSION_1_3)
-                .request_validation_layers(!cfg!(debug_assertions))
+                .request_validation_layers(cfg!(debug_assertions))
                 .use_default_debug_messenger()
                 .build()?;
             self.instance = Some(instance);
