@@ -18,7 +18,7 @@ impl App {
         let window = event_loop.create_window(Window::default_attributes())?;
 
         // ash-bootstrap welds the window's surface into the instance, so we build it only once and
-        // never on a second `resumed`; safe only because desktop (mac/Windows) fires `resumed` once.
+        // never on a second `resumed`; safe only because desktop (macOS/Windows) fires `resumed` once.
         if self.instance.is_none() {
             let window_handle = window.window_handle()?;
             let display_handle = window.display_handle()?;
