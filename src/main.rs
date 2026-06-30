@@ -1,6 +1,9 @@
 use pollster::FutureExt;
 use std::sync::Arc;
-use wgpu::{Backends, Device, DeviceDescriptor, Features, Instance, InstanceDescriptor, PowerPreference, Queue, RequestAdapterOptions};
+use wgpu::{
+    Backends, Device, DeviceDescriptor, Features, Instance, InstanceDescriptor, PowerPreference, Queue, RequestAdapterOptions, Surface,
+    SurfaceConfiguration, TextureUsages,
+};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -10,18 +13,20 @@ const APP_NAME: &str = "wgpu-renderer";
 
 #[derive(Default)]
 struct App {
-    window: Option<Arc<Window>>,
-    device: Option<Device>,
-    queue: Option<Queue>,
+    state: Option<State>,
 }
 
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = Arc::new(
-            event_loop
-                .create_window(Window::default_attributes().with_title(APP_NAME))
-                .expect("Failed to create window"),
-        );
+struct State {
+    window: Arc<Window>,
+    device: Device,
+    queue: Queue,
+    surface: Surface<'static>,
+    config: SurfaceConfiguration,
+}
+
+impl State {
+    fn new(window: Arc<Window>) -> Self {
+        let size = window.inner_size();
 
         let instance = Instance::new(InstanceDescriptor {
             backends: Backends::PRIMARY,
@@ -52,9 +57,47 @@ impl ApplicationHandler for App {
             .block_on()
             .expect("Failed to create a device");
 
-        self.window = Some(window);
-        self.device = Some(device);
-        self.queue = Some(queue);
+        let surface = instance.create_surface(window.clone()).expect("Failed to create surface");
+        let surface_capabilities = surface.get_capabilities(&adapter);
+        let surface_format = surface_capabilities
+            .formats
+            .iter()
+            .find(|f| f.is_srgb())
+            .copied()
+            .unwrap_or(surface_capabilities.formats[0]);
+
+        let config = SurfaceConfiguration {
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: size.width,
+            height: size.height,
+            present_mode: surface_capabilities.present_modes[0],
+            desired_maximum_frame_latency: 2,
+            alpha_mode: surface_capabilities.alpha_modes[0],
+            view_formats: vec![],
+        };
+
+        surface.configure(&device, &config);
+
+        Self {
+            window,
+            device,
+            queue,
+            surface,
+            config,
+        }
+    }
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window = Arc::new(
+            event_loop
+                .create_window(Window::default_attributes().with_title(APP_NAME))
+                .expect("Failed to create window"),
+        );
+
+        self.state = Some(State::new(window));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
