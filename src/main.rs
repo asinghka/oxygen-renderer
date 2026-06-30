@@ -5,6 +5,7 @@ use wgpu::{
     SurfaceConfiguration, TextureUsages,
 };
 use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
@@ -87,6 +88,14 @@ impl State {
             config,
         }
     }
+
+    fn render(&mut self) {
+        todo!()
+    }
+
+    fn resize(&mut self, size: PhysicalSize<u32>) {
+        todo!()
+    }
 }
 
 impl ApplicationHandler for App {
@@ -105,8 +114,24 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
+            WindowEvent::RedrawRequested => {
+                if let Some(state) = &mut self.state {
+                    state.render();
+                }
+            }
+            WindowEvent::Resized(size) => {
+                if let Some(state) = &mut self.state {
+                    state.resize(size);
+                }
+            }
             _ => {}
         };
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(state) = self.state.as_ref() {
+            state.window.request_redraw();
+        }
     }
 }
 
