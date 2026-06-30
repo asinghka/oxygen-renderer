@@ -1,8 +1,9 @@
 use pollster::FutureExt;
 use std::sync::Arc;
+use wgpu::wgt::{CommandEncoderDescriptor, TextureViewDescriptor};
 use wgpu::{
-    Backends, Device, DeviceDescriptor, Features, Instance, InstanceDescriptor, PowerPreference, Queue, RequestAdapterOptions, Surface,
-    SurfaceConfiguration, TextureUsages,
+    Backends, Color, CurrentSurfaceTexture, Device, DeviceDescriptor, Features, Instance, InstanceDescriptor, LoadOp, Operations, PowerPreference,
+    Queue, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, TextureUsages,
 };
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -90,11 +91,41 @@ impl State {
     }
 
     fn render(&mut self) {
-        todo!()
+        let frame = match self.surface.get_current_texture() {
+            CurrentSurfaceTexture::Success(frame) => frame,
+            CurrentSurfaceTexture::Suboptimal(frame) => frame,
+            _ => return,
+        };
+
+        let view = frame.texture.create_view(&TextureViewDescriptor::default());
+
+        let mut encoder = self.device.create_command_encoder(&CommandEncoderDescriptor::default());
+
+        {
+            let _ = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color::BLUE),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+        }
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+        frame.present();
     }
 
-    fn resize(&mut self, size: PhysicalSize<u32>) {
-        todo!()
+    fn resize(&mut self, _size: PhysicalSize<u32>) {
+        return
     }
 }
 
