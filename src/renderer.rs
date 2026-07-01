@@ -1,8 +1,12 @@
-use egui::ViewportId;
+use egui::load::SizedTexture;
+use egui::{Frame, ViewportId, vec2};
 use egui_wgpu::RendererOptions;
 use pollster::FutureExt;
 use std::sync::Arc;
-use wgpu::{Backends, Color, CurrentSurfaceTexture, Features, LoadOp, Operations, PowerPreference, StoreOp, TextureUsages};
+use wgpu::{
+    Backends, Color, CurrentSurfaceTexture, Extent3d, Features, FilterMode, LoadOp, Operations, PowerPreference, StoreOp, TextureDimension,
+    TextureFormat, TextureUsages,
+};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -15,7 +19,11 @@ pub(crate) struct Renderer {
 
     egui_context: egui::Context,
     pub(crate) egui_winit_state: egui_winit::State,
-    egui_wgpu: egui_wgpu::Renderer,
+    egui_renderer: egui_wgpu::Renderer,
+
+    _viewport_texture: wgpu::Texture,
+    viewport_texture_view: wgpu::TextureView,
+    viewport_texture_id: egui::TextureId,
 }
 
 impl Renderer {
@@ -82,7 +90,26 @@ impl Renderer {
             window.theme(),
             Some(device.limits().max_texture_dimension_2d as usize),
         );
-        let egui_wgpu = egui_wgpu::Renderer::new(&device, surface_format, RendererOptions::default());
+        let mut egui_renderer = egui_wgpu::Renderer::new(&device, surface_format, RendererOptions::default());
+
+        let viewport_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let viewport_texture_view = viewport_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let viewport_texture_id = egui_renderer.register_native_texture(&device, &viewport_texture_view, FilterMode::Linear);
 
         Self {
             window,
@@ -92,7 +119,10 @@ impl Renderer {
             config,
             egui_context,
             egui_winit_state,
-            egui_wgpu,
+            egui_renderer,
+            _viewport_texture: viewport_texture,
+            viewport_texture_view,
+            viewport_texture_id,
         }
     }
 
@@ -109,23 +139,54 @@ impl Renderer {
 
         let raw_input = self.egui_winit_state.take_egui_input(&self.window);
         let full_output = self.egui_context.run_ui(raw_input, |ui| {
-            egui::Window::new("Window").show(ui, |ui| {
-                ui.label("Hello, world!");
+            egui::Panel::bottom("debug-panel").show(ui, |ui| {
+                ui.take_available_space();
+            });
+            egui::Panel::left("scene-tree").show(ui, |ui| {
+                ui.take_available_space();
+            });
+            egui::Panel::right("inspector").show(ui, |ui| {
+                ui.take_available_space();
+            });
+            egui::CentralPanel::default().frame(Frame::NONE).show(ui, |ui| {
+                ui.image(SizedTexture::new(
+                    self.viewport_texture_id,
+                    vec2(self.config.width as f32, self.config.height as f32),
+                ));
             });
         });
         self.egui_winit_state.handle_platform_output(&self.window, full_output.platform_output);
         let clipped_primitives = self.egui_context.tessellate(full_output.shapes, full_output.pixels_per_point);
 
         for (id, delta) in &full_output.textures_delta.set {
-            self.egui_wgpu.update_texture(&self.device, &self.queue, *id, delta);
+            self.egui_renderer.update_texture(&self.device, &self.queue, *id, delta);
         }
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [self.config.width, self.config.height],
             pixels_per_point: full_output.pixels_per_point,
         };
-        self.egui_wgpu
+        self.egui_renderer
             .update_buffers(&self.device, &self.queue, &mut encoder, &clipped_primitives, &screen_descriptor);
+
+        {
+            let _ = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.viewport_texture_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color::GREEN),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+        }
 
         {
             let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -145,7 +206,7 @@ impl Renderer {
                 multiview_mask: None,
             });
 
-            self.egui_wgpu
+            self.egui_renderer
                 .render(&mut render_pass.forget_lifetime(), &clipped_primitives, &screen_descriptor);
 
             full_output.textures_delta.free;
