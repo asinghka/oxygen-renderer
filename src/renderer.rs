@@ -1,26 +1,28 @@
+use egui::ViewportId;
+use egui_wgpu::RendererOptions;
 use pollster::FutureExt;
 use std::sync::Arc;
-use wgpu::wgt::{CommandEncoderDescriptor, TextureViewDescriptor};
-use wgpu::{
-    Backends, Color, CurrentSurfaceTexture, Device, DeviceDescriptor, Features, Instance, InstanceDescriptor, LoadOp, Operations, PowerPreference,
-    Queue, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, TextureUsages,
-};
+use wgpu::{Backends, Color, CurrentSurfaceTexture, Features, LoadOp, Operations, PowerPreference, StoreOp, TextureUsages};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 pub(crate) struct Renderer {
     pub(crate) window: Arc<Window>,
-    device: Device,
-    queue: Queue,
-    surface: Surface<'static>,
-    config: SurfaceConfiguration,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    surface: wgpu::Surface<'static>,
+    config: wgpu::SurfaceConfiguration,
+
+    egui_context: egui::Context,
+    egui_winit_state: egui_winit::State,
+    egui_wgpu: egui_wgpu::Renderer,
 }
 
 impl Renderer {
     pub(crate) fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
-        let instance = Instance::new(InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: Backends::PRIMARY,
             flags: Default::default(),
             memory_budget_thresholds: Default::default(),
@@ -29,7 +31,7 @@ impl Renderer {
         });
 
         let adapter = instance
-            .request_adapter(&RequestAdapterOptions {
+            .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: PowerPreference::HighPerformance,
                 force_fallback_adapter: false,
                 compatible_surface: None,
@@ -38,7 +40,7 @@ impl Renderer {
             .expect("Failed to create an adapter");
 
         let (device, queue) = adapter
-            .request_device(&DeviceDescriptor {
+            .request_device(&wgpu::DeviceDescriptor {
                 label: None,
                 required_features: Features::empty(),
                 required_limits: Default::default(),
@@ -58,7 +60,7 @@ impl Renderer {
             .copied()
             .unwrap_or(surface_capabilities.formats[0]);
 
-        let config = SurfaceConfiguration {
+        let config = wgpu::SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
             width: size.width,
@@ -71,12 +73,26 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
+        let egui_context = egui::Context::default();
+        let egui_winit_state = egui_winit::State::new(
+            egui_context.clone(),
+            ViewportId::ROOT,
+            window.as_ref(),
+            None,
+            window.theme(),
+            Some(device.limits().max_texture_dimension_2d as usize),
+        );
+        let egui_wgpu = egui_wgpu::Renderer::new(&device, surface_format, RendererOptions::default());
+
         Self {
             window,
             device,
             queue,
             surface,
             config,
+            egui_context,
+            egui_winit_state,
+            egui_wgpu,
         }
     }
 
@@ -87,14 +103,14 @@ impl Renderer {
             _ => return,
         };
 
-        let view = frame.texture.create_view(&TextureViewDescriptor::default());
+        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self.device.create_command_encoder(&CommandEncoderDescriptor::default());
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         {
-            let _ = encoder.begin_render_pass(&RenderPassDescriptor {
+            let _ = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
-                color_attachments: &[Some(RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     depth_slice: None,
                     resolve_target: None,
