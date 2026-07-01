@@ -14,7 +14,7 @@ pub(crate) struct Renderer {
     config: wgpu::SurfaceConfiguration,
 
     egui_context: egui::Context,
-    egui_winit_state: egui_winit::State,
+    pub(crate) egui_winit_state: egui_winit::State,
     egui_wgpu: egui_wgpu::Renderer,
 }
 
@@ -107,8 +107,28 @@ impl Renderer {
 
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
+        let raw_input = self.egui_winit_state.take_egui_input(&self.window);
+        let full_output = self.egui_context.run_ui(raw_input, |ui| {
+            egui::Window::new("Window").show(ui, |ui| {
+                ui.label("Hello, world!");
+            });
+        });
+        self.egui_winit_state.handle_platform_output(&self.window, full_output.platform_output);
+        let clipped_primitives = self.egui_context.tessellate(full_output.shapes, full_output.pixels_per_point);
+
+        for (id, delta) in &full_output.textures_delta.set {
+            self.egui_wgpu.update_texture(&self.device, &self.queue, *id, delta);
+        }
+
+        let screen_descriptor = egui_wgpu::ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: full_output.pixels_per_point,
+        };
+        self.egui_wgpu
+            .update_buffers(&self.device, &self.queue, &mut encoder, &clipped_primitives, &screen_descriptor);
+
         {
-            let _ = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
@@ -124,6 +144,11 @@ impl Renderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+
+            self.egui_wgpu
+                .render(&mut render_pass.forget_lifetime(), &clipped_primitives, &screen_descriptor);
+
+            full_output.textures_delta.free;
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

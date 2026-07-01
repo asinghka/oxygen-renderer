@@ -24,19 +24,19 @@ impl ApplicationHandler for App {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
+        let Some(state) = &mut self.state else { return };
+
+        let _ = state.egui_winit_state.on_window_event(&state.window, &event);
+
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                if let Some(state) = &mut self.state {
-                    state.render();
-                }
+                state.render();
             }
             WindowEvent::Resized(size) => {
-                if let Some(state) = &mut self.state {
-                    state.resize(size);
-                }
+                state.resize(size);
             }
             _ => {}
         };
