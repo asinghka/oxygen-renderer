@@ -4,7 +4,9 @@ use crate::viewport::Viewport;
 use egui::vec2;
 use pollster::FutureExt;
 use std::sync::Arc;
-use wgpu::{Backends, Color, CurrentSurfaceTexture, Features, LoadOp, Operations, PowerPreference, StoreOp, TextureUsages};
+use wgpu::{
+    Backends, Color, CurrentSurfaceTexture, Features, LoadOp, Operations, PowerPreference, ShaderSource, StoreOp, TextureFormat, TextureUsages,
+};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -14,6 +16,8 @@ pub(crate) struct Renderer {
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
+
+    render_pipeline: wgpu::RenderPipeline,
 
     pub(crate) gui: Gui,
     viewport: Viewport,
@@ -42,7 +46,7 @@ impl Renderer {
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
-                label: None,
+                label: Some("device"),
                 required_features: Features::empty(),
                 required_limits: Default::default(),
                 experimental_features: Default::default(),
@@ -74,6 +78,43 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
+        let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("shader"),
+            source: ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("pipeline-layout"),
+            bind_group_layouts: &[],
+            immediate_size: 0,
+        });
+
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("render-pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader_module,
+                entry_point: None,
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            primitive: Default::default(),
+            depth_stencil: None,
+            multisample: Default::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &shader_module,
+                entry_point: None,
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: TextureFormat::Rgba8Unorm,
+                    blend: None,
+                    write_mask: Default::default(),
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+
         let mut gui = Gui::new(&window, &device, surface_format);
         let viewport = Viewport::new(&device, &mut gui, config.width, config.height);
 
@@ -83,6 +124,7 @@ impl Renderer {
             queue,
             surface,
             config,
+            render_pipeline,
             gui,
             viewport,
         }
@@ -100,14 +142,14 @@ impl Renderer {
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         {
-            let _ = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("render-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.viewport.texture_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: Operations {
-                        load: LoadOp::Clear(Color::GREEN),
+                        load: LoadOp::Clear(Color::BLACK),
                         store: StoreOp::Store,
                     },
                 })],
@@ -116,6 +158,9 @@ impl Renderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.draw(0..3, 0..1);
         }
 
         self.gui.render(&self.window, &self.device, &self.queue, &mut encoder, &view, |ui| {
