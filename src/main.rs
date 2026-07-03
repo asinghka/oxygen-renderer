@@ -2,6 +2,7 @@ mod app;
 mod editor;
 mod gui;
 mod renderer;
+mod style;
 mod viewport;
 
 use crate::app::App;
