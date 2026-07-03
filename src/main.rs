@@ -1,6 +1,7 @@
 mod app;
 mod gui;
 mod renderer;
+mod viewport;
 
 use crate::app::App;
 use winit::event_loop::{ControlFlow, EventLoop};

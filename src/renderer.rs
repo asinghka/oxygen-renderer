@@ -1,12 +1,10 @@
 use crate::gui::Gui;
+use crate::viewport::Viewport;
 use egui::load::SizedTexture;
 use egui::{Frame, vec2};
 use pollster::FutureExt;
 use std::sync::Arc;
-use wgpu::{
-    Backends, Color, CurrentSurfaceTexture, Extent3d, Features, FilterMode, LoadOp, Operations, PowerPreference, StoreOp, TextureDimension,
-    TextureFormat, TextureUsages,
-};
+use wgpu::{Backends, Color, CurrentSurfaceTexture, Features, LoadOp, Operations, PowerPreference, StoreOp, TextureUsages};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -18,10 +16,7 @@ pub(crate) struct Renderer {
     config: wgpu::SurfaceConfiguration,
 
     pub(crate) gui: Gui,
-
-    _viewport_texture: wgpu::Texture,
-    viewport_texture_view: wgpu::TextureView,
-    viewport_texture_id: egui::TextureId,
+    viewport: Viewport,
 }
 
 impl Renderer {
@@ -80,25 +75,7 @@ impl Renderer {
         surface.configure(&device, &config);
 
         let mut gui = Gui::new(&window, &device, surface_format);
-
-        let viewport_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                width: config.width,
-                height: config.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Unorm,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-
-        let viewport_texture_view = viewport_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let viewport_texture_id = gui.renderer.register_native_texture(&device, &viewport_texture_view, FilterMode::Linear);
+        let viewport = Viewport::new(&device, &mut gui, config.width, config.height);
 
         Self {
             window,
@@ -107,9 +84,7 @@ impl Renderer {
             surface,
             config,
             gui,
-            _viewport_texture: viewport_texture,
-            viewport_texture_view,
-            viewport_texture_id,
+            viewport,
         }
     }
 
@@ -137,7 +112,7 @@ impl Renderer {
             });
             egui::CentralPanel::default().frame(Frame::NONE).show(ui, |ui| {
                 ui.image(SizedTexture::new(
-                    self.viewport_texture_id,
+                    self.viewport.texture_id,
                     vec2(self.config.width as f32, self.config.height as f32),
                 ));
             });
@@ -161,7 +136,7 @@ impl Renderer {
             let _ = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.viewport_texture_view,
+                    view: &self.viewport.texture_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: Operations {
