@@ -208,8 +208,6 @@ impl Renderer {
 
             self.egui_renderer
                 .render(&mut render_pass.forget_lifetime(), &clipped_primitives, &screen_descriptor);
-
-            full_output.textures_delta.free;
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
