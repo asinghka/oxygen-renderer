@@ -1,7 +1,7 @@
 use egui::Frame;
 use egui::load::SizedTexture;
 
-pub(crate) fn show(ui: &mut egui::Ui, texture_id: egui::TextureId, size: egui::Vec2) {
+pub(crate) fn build(ui: &mut egui::Ui, texture_id: egui::TextureId, size: egui::Vec2) {
     egui::Panel::bottom("debug-panel").show(ui, |ui| {
         ui.take_available_space();
     });

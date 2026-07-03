@@ -119,7 +119,7 @@ impl Renderer {
         }
 
         self.gui.render(&self.window, &self.device, &self.queue, &mut encoder, &view, |ui| {
-            editor::show(ui, self.viewport.texture_id, vec2(self.config.width as f32, self.config.height as f32));
+            editor::build(ui, self.viewport.texture_id, vec2(self.config.width as f32, self.config.height as f32));
         });
 
         self.queue.submit(std::iter::once(encoder.finish()));
