@@ -99,39 +99,6 @@ impl Renderer {
 
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-        let raw_input = self.gui.winit_state.take_egui_input(&self.window);
-        let full_output = self.gui.context.run_ui(raw_input, |ui| {
-            egui::Panel::bottom("debug-panel").show(ui, |ui| {
-                ui.take_available_space();
-            });
-            egui::Panel::left("scene-tree").show(ui, |ui| {
-                ui.take_available_space();
-            });
-            egui::Panel::right("inspector").show(ui, |ui| {
-                ui.take_available_space();
-            });
-            egui::CentralPanel::default().frame(Frame::NONE).show(ui, |ui| {
-                ui.image(SizedTexture::new(
-                    self.viewport.texture_id,
-                    vec2(self.config.width as f32, self.config.height as f32),
-                ));
-            });
-        });
-        self.gui.winit_state.handle_platform_output(&self.window, full_output.platform_output);
-        let clipped_primitives = self.gui.context.tessellate(full_output.shapes, full_output.pixels_per_point);
-
-        for (id, delta) in &full_output.textures_delta.set {
-            self.gui.renderer.update_texture(&self.device, &self.queue, *id, delta);
-        }
-
-        let screen_descriptor = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [self.config.width, self.config.height],
-            pixels_per_point: full_output.pixels_per_point,
-        };
-        self.gui
-            .renderer
-            .update_buffers(&self.device, &self.queue, &mut encoder, &clipped_primitives, &screen_descriptor);
-
         {
             let _ = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
@@ -151,28 +118,23 @@ impl Renderer {
             });
         }
 
-        {
-            let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color::BLUE),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
+        self.gui.render(&self.window, &self.device, &self.queue, &mut encoder, &view, |ui| {
+            egui::Panel::bottom("debug-panel").show(ui, |ui| {
+                ui.take_available_space();
             });
-
-            self.gui
-                .renderer
-                .render(&mut render_pass.forget_lifetime(), &clipped_primitives, &screen_descriptor);
-        }
+            egui::Panel::left("scene-tree").show(ui, |ui| {
+                ui.take_available_space();
+            });
+            egui::Panel::right("inspector").show(ui, |ui| {
+                ui.take_available_space();
+            });
+            egui::CentralPanel::default().frame(Frame::NONE).show(ui, |ui| {
+                ui.image(SizedTexture::new(
+                    self.viewport.texture_id,
+                    vec2(self.config.width as f32, self.config.height as f32),
+                ));
+            });
+        });
 
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
