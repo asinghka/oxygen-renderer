@@ -30,7 +30,7 @@ impl ApplicationHandler for App {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
         let Some(state) = &mut self.state else { return };
 
-        let _ = state.egui_winit_state.on_window_event(&state.window, &event);
+        let _ = state.gui.on_window_event(&state.window, &event);
 
         match event {
             WindowEvent::CloseRequested => {

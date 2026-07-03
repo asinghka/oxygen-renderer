@@ -1,4 +1,5 @@
 mod app;
+mod gui;
 mod renderer;
 
 use crate::app::App;
