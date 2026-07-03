@@ -1,7 +1,7 @@
+use crate::editor;
 use crate::gui::Gui;
 use crate::viewport::Viewport;
-use egui::load::SizedTexture;
-use egui::{Frame, vec2};
+use egui::vec2;
 use pollster::FutureExt;
 use std::sync::Arc;
 use wgpu::{Backends, Color, CurrentSurfaceTexture, Features, LoadOp, Operations, PowerPreference, StoreOp, TextureUsages};
@@ -119,21 +119,7 @@ impl Renderer {
         }
 
         self.gui.render(&self.window, &self.device, &self.queue, &mut encoder, &view, |ui| {
-            egui::Panel::bottom("debug-panel").show(ui, |ui| {
-                ui.take_available_space();
-            });
-            egui::Panel::left("scene-tree").show(ui, |ui| {
-                ui.take_available_space();
-            });
-            egui::Panel::right("inspector").show(ui, |ui| {
-                ui.take_available_space();
-            });
-            egui::CentralPanel::default().frame(Frame::NONE).show(ui, |ui| {
-                ui.image(SizedTexture::new(
-                    self.viewport.texture_id,
-                    vec2(self.config.width as f32, self.config.height as f32),
-                ));
-            });
+            editor::show(ui, self.viewport.texture_id, vec2(self.config.width as f32, self.config.height as f32));
         });
 
         self.queue.submit(std::iter::once(encoder.finish()));

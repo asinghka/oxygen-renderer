@@ -1,4 +1,5 @@
 mod app;
+mod editor;
 mod gui;
 mod renderer;
 mod viewport;
