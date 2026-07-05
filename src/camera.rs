@@ -19,7 +19,7 @@ impl CameraUniform {
     }
 }
 
-pub(crate) struct Camera {
+pub(crate) struct CameraDescriptor {
     pub(crate) eye: Vec3,
     pub(crate) target: Vec3,
     pub(crate) up: Vec3,
@@ -29,7 +29,29 @@ pub(crate) struct Camera {
     pub(crate) zfar: f32,
 }
 
+pub(crate) struct Camera {
+    eye: Vec3,
+    target: Vec3,
+    up: Vec3,
+    aspect: f32,
+    fovy: f32,
+    znear: f32,
+    zfar: f32,
+}
+
 impl Camera {
+    pub(crate) fn new(camera_descriptor: &CameraDescriptor) -> Self {
+        Self {
+            eye: camera_descriptor.eye,
+            target: camera_descriptor.target,
+            up: camera_descriptor.up,
+            aspect: camera_descriptor.aspect,
+            fovy: camera_descriptor.fovy,
+            znear: camera_descriptor.znear,
+            zfar: camera_descriptor.zfar,
+        }
+    }
+
     pub(crate) fn build_view_projection_matrix(&self) -> Mat4 {
         let view = view::look_at_mat4(self.eye, self.target, self.up);
         let proj = directx::perspective(self.fovy.to_radians(), self.aspect, self.znear, self.zfar);

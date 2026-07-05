@@ -1,8 +1,10 @@
+use crate::input::InputHandler;
 use crate::renderer::Renderer;
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
+use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowId};
 
 const APP_NAME: &str = "Oxygen";
@@ -10,6 +12,7 @@ const APP_NAME: &str = "Oxygen";
 #[derive(Default)]
 pub(crate) struct App {
     renderer: Option<Renderer>,
+    input_handler: InputHandler,
 }
 
 impl ApplicationHandler for App {
@@ -30,17 +33,42 @@ impl ApplicationHandler for App {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
         let Some(renderer) = &mut self.renderer else { return };
 
-        let _ = renderer.gui.on_window_event(&renderer.window, &event);
+        let response = renderer.gui.on_window_event(&renderer.window, &event);
 
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
+                renderer.update(&self.input_handler);
                 renderer.render();
             }
             WindowEvent::Resized(size) => {
                 renderer.resize(size);
+            }
+            WindowEvent::Focused(false) => {
+                self.input_handler.clear();
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                match event {
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(key_code),
+                        state,
+                        ..
+                    } => {
+                        match state {
+                            ElementState::Pressed => {
+                                if !response.consumed {
+                                    self.input_handler.key_pressed(key_code);
+                                }
+                            }
+                            ElementState::Released => {
+                                self.input_handler.key_released(key_code);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
             }
             _ => {}
         };

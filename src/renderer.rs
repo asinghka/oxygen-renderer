@@ -1,9 +1,11 @@
-use crate::camera::{Camera, CameraUniform};
+use crate::camera::{Camera, CameraDescriptor, CameraUniform};
 use crate::editor;
 use crate::gui::Gui;
+use crate::input::InputHandler;
 use crate::vertex::{INDICES, VERTICES, Vertex};
 use crate::viewport::Viewport;
 use egui::vec2;
+use glam::Vec3;
 use pollster::FutureExt;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -11,6 +13,7 @@ use wgpu::{
     Backends, Color, CurrentSurfaceTexture, Features, LoadOp, Operations, PowerPreference, ShaderSource, StoreOp, TextureFormat, TextureUsages,
 };
 use winit::dpi::PhysicalSize;
+use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 pub(crate) struct Renderer {
@@ -108,7 +111,7 @@ impl Renderer {
 
         let num_indices = INDICES.len() as u32;
 
-        let camera = Camera {
+        let camera = Camera::new(&CameraDescriptor {
             eye: glam::vec3(0.0, 1.0, 2.0),
             target: glam::Vec3::ZERO,
             up: glam::Vec3::Y,
@@ -116,7 +119,7 @@ impl Renderer {
             fovy: 45.0,
             znear: 0.1,
             zfar: 100.0,
-        };
+        });
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_projection_matrix(&camera);
@@ -249,6 +252,27 @@ impl Renderer {
         frame.present();
     }
 
+    pub(crate) fn update(&mut self, input_handler: &InputHandler) {
+        let mut direction = Vec3::ZERO;
+
+        if input_handler.contains(KeyCode::KeyW) {
+            direction = Vec3::Y;
+        }
+        if input_handler.contains(KeyCode::KeyA) {
+            direction = Vec3::X;
+        }
+        if input_handler.contains(KeyCode::KeyS) {
+            direction = -Vec3::Y;
+        }
+        if input_handler.contains(KeyCode::KeyD) {
+            direction = Vec3::X;
+        }
+
+        if direction != Vec3::ZERO {
+            self.update_camera_uniform_buffer();
+        }
+    }
+
     pub(crate) fn resize(&mut self, size: PhysicalSize<u32>) {
         if size.width == 0 || size.height == 0 {
             return;
@@ -259,6 +283,10 @@ impl Renderer {
         self.surface.configure(&self.device, &self.config);
 
         self.camera.update_aspect_ratio(size.width as f32 / size.height as f32);
+        self.update_camera_uniform_buffer();
+    }
+
+    fn update_camera_uniform_buffer(&mut self) {
         self.camera_uniform.update_view_projection_matrix(&self.camera);
         self.queue
             .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]));
