@@ -59,7 +59,7 @@ impl Camera {
         proj * view
     }
 
-    pub(crate) fn update_eye(&mut self, direction: Vec3) {
+    pub(crate) fn update(&mut self, direction: Vec3) {
         self.eye += direction * 0.1;
         self.target += direction * 0.1;
     }

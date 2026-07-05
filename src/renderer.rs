@@ -255,21 +255,27 @@ impl Renderer {
     pub(crate) fn update(&mut self, input_handler: &InputHandler) {
         let mut direction = Vec3::ZERO;
 
-        if input_handler.contains(KeyCode::KeyW) {
-            direction += -Vec3::Z;
-        }
         if input_handler.contains(KeyCode::KeyA) {
-            direction += -Vec3::X;
-        }
-        if input_handler.contains(KeyCode::KeyS) {
-            direction += Vec3::Z;
+            direction -= Vec3::X;
         }
         if input_handler.contains(KeyCode::KeyD) {
             direction += Vec3::X;
         }
+        if input_handler.contains(KeyCode::KeyQ) {
+            direction += Vec3::Y;
+        }
+        if input_handler.contains(KeyCode::KeyE) {
+            direction -= Vec3::Y;
+        }
+        if input_handler.contains(KeyCode::KeyW) {
+            direction -= Vec3::Z;
+        }
+        if input_handler.contains(KeyCode::KeyS) {
+            direction += Vec3::Z;
+        }
 
         if direction != Vec3::ZERO {
-            self.camera.update_eye(direction);
+            self.camera.update(direction);
             self.update_camera_uniform_buffer();
         }
     }
