@@ -256,16 +256,16 @@ impl Renderer {
         let mut direction = Vec3::ZERO;
 
         if input_handler.contains(KeyCode::KeyW) {
-            direction = Vec3::Y;
+            direction += -Vec3::Z;
         }
         if input_handler.contains(KeyCode::KeyA) {
-            direction = -Vec3::X;
+            direction += -Vec3::X;
         }
         if input_handler.contains(KeyCode::KeyS) {
-            direction = -Vec3::Y;
+            direction += Vec3::Z;
         }
         if input_handler.contains(KeyCode::KeyD) {
-            direction = Vec3::X;
+            direction += Vec3::X;
         }
 
         if direction != Vec3::ZERO {
