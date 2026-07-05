@@ -59,6 +59,10 @@ impl Camera {
         proj * view
     }
 
+    pub(crate) fn update_eye(&mut self, direction: Vec3) {
+        self.eye += direction * 0.1;
+    }
+
     pub(crate) fn update_aspect_ratio(&mut self, aspect: f32) {
         self.aspect = aspect;
     }

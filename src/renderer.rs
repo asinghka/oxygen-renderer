@@ -259,7 +259,7 @@ impl Renderer {
             direction = Vec3::Y;
         }
         if input_handler.contains(KeyCode::KeyA) {
-            direction = Vec3::X;
+            direction = -Vec3::X;
         }
         if input_handler.contains(KeyCode::KeyS) {
             direction = -Vec3::Y;
@@ -269,6 +269,7 @@ impl Renderer {
         }
 
         if direction != Vec3::ZERO {
+            self.camera.update_eye(direction);
             self.update_camera_uniform_buffer();
         }
     }
