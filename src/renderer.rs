@@ -1,6 +1,6 @@
 use crate::editor;
 use crate::gui::Gui;
-use crate::vertex::{VERTICES, Vertex};
+use crate::vertex::{INDICES, VERTICES, Vertex};
 use crate::viewport::Viewport;
 use egui::vec2;
 use pollster::FutureExt;
@@ -21,6 +21,8 @@ pub(crate) struct Renderer {
 
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32,
 
     pub(crate) gui: Gui,
     viewport: Viewport,
@@ -98,6 +100,14 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("index-buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let num_indices = INDICES.len() as u32;
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("render-pipeline"),
             layout: Some(&pipeline_layout),
@@ -135,6 +145,8 @@ impl Renderer {
             config,
             render_pipeline,
             vertex_buffer,
+            index_buffer,
+            num_indices,
             gui,
             viewport,
         }
@@ -171,7 +183,8 @@ impl Renderer {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
         self.gui.render(&self.window, &self.device, &self.queue, &mut encoder, &view, |ui| {
