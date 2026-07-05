@@ -1,17 +1,23 @@
-@vertex
-fn vertex_shader(
-    @builtin(vertex_index) in_vertex_index: u32
-) -> @builtin(position) vec4<f32> {
-      var positions = array<vec2f, 3>(
-          vec2f(-0.5, -0.5),
-          vec2f( 0.5, -0.5),
-          vec2f( 0.0,  0.5),
-      );
+struct VertexInput {
+    @location(0) position: vec3<f32>,
+    @location(1) color: vec4<f32>,
+}
 
-      return vec4<f32>(positions[in_vertex_index], 1.0, 1.0);
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) color: vec4<f32>,
+}
+
+@vertex
+fn vertex_shader(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    out.color = in.color;
+    out.clip_position = vec4<f32>(in.position, 1.0);
+
+    return out;
 }
 
 @fragment
-fn fragment_shader() -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
+    return in.color;
 }

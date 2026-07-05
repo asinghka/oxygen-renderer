@@ -1,9 +1,11 @@
 use crate::editor;
 use crate::gui::Gui;
+use crate::vertex::{VERTICES, Vertex};
 use crate::viewport::Viewport;
 use egui::vec2;
 use pollster::FutureExt;
 use std::sync::Arc;
+use wgpu::util::DeviceExt;
 use wgpu::{
     Backends, Color, CurrentSurfaceTexture, Features, LoadOp, Operations, PowerPreference, ShaderSource, StoreOp, TextureFormat, TextureUsages,
 };
@@ -18,6 +20,7 @@ pub(crate) struct Renderer {
     config: wgpu::SurfaceConfiguration,
 
     render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
 
     pub(crate) gui: Gui,
     viewport: Viewport,
@@ -89,6 +92,12 @@ impl Renderer {
             immediate_size: 0,
         });
 
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("vertex-buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("render-pipeline"),
             layout: Some(&pipeline_layout),
@@ -96,9 +105,9 @@ impl Renderer {
                 module: &shader_module,
                 entry_point: None,
                 compilation_options: Default::default(),
-                buffers: &[],
+                buffers: &[Vertex::layout()],
             },
-            primitive: Default::default(),
+            primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: Default::default(),
             fragment: Some(wgpu::FragmentState {
@@ -125,6 +134,7 @@ impl Renderer {
             surface,
             config,
             render_pipeline,
+            vertex_buffer,
             gui,
             viewport,
         }
@@ -160,6 +170,7 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..3, 0..1);
         }
 
