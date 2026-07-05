@@ -5,7 +5,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
 
-const APP_NAME: &str = "wgpu-renderer";
+const APP_NAME: &str = "Oxygen";
 
 #[derive(Default)]
 pub(crate) struct App {
