@@ -68,7 +68,7 @@ fn set_spacing(style: &mut egui::Style) {
 
     style.visuals.window_corner_radius = CornerRadius::same(6);
     style.visuals.menu_corner_radius = CornerRadius::same(6);
-    
+
     let small_corner_radius = CornerRadius::same(4);
     style.visuals.widgets.noninteractive.corner_radius = small_corner_radius;
     style.visuals.widgets.inactive.corner_radius = small_corner_radius;
