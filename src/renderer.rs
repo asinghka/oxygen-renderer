@@ -112,7 +112,7 @@ impl Renderer {
         let num_indices = INDICES.len() as u32;
 
         let camera = Camera::new(&CameraDescriptor {
-            eye: glam::vec3(0.0, 1.0, 2.0),
+            eye: glam::vec3(0.0, 0.0, 2.0),
             target: glam::Vec3::ZERO,
             up: glam::Vec3::Y,
             aspect: config.width as f32 / config.height as f32,
