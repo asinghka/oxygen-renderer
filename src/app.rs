@@ -9,7 +9,7 @@ const APP_NAME: &str = "Oxygen";
 
 #[derive(Default)]
 pub(crate) struct App {
-    state: Option<Renderer>,
+    renderer: Option<Renderer>,
 }
 
 impl ApplicationHandler for App {
@@ -24,30 +24,30 @@ impl ApplicationHandler for App {
                 .expect("Failed to create window"),
         );
 
-        self.state = Some(Renderer::new(window));
+        self.renderer = Some(Renderer::new(window));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
-        let Some(state) = &mut self.state else { return };
+        let Some(renderer) = &mut self.renderer else { return };
 
-        let _ = state.gui.on_window_event(&state.window, &event);
+        let _ = renderer.gui.on_window_event(&renderer.window, &event);
 
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                state.render();
+                renderer.render();
             }
             WindowEvent::Resized(size) => {
-                state.resize(size);
+                renderer.resize(size);
             }
             _ => {}
         };
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(state) = self.state.as_ref() {
+        if let Some(state) = self.renderer.as_ref() {
             state.window.request_redraw();
         }
     }
