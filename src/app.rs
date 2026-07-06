@@ -5,6 +5,7 @@ use crate::input::InputState;
 use crate::renderer::Renderer;
 use crate::state::AppState;
 use std::sync::Arc;
+use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
@@ -18,6 +19,7 @@ pub(crate) struct App {
     app_state: Option<AppState>,
     camera_controller: CameraController,
     input_state: InputState,
+    last_frame_time: Option<Instant>,
 }
 
 impl ApplicationHandler for App {
@@ -60,7 +62,11 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                let displacement = self.camera_controller.compute(&self.input_state);
+                let now = Instant::now();
+                let dt = self.last_frame_time.map_or(0.0, |last| (now - last).as_secs_f32()).min(0.1);
+                self.last_frame_time = Some(now);
+
+                let displacement = self.camera_controller.compute(&self.input_state, dt);
                 app_state.camera.displace(displacement);
                 app_state
                     .renderer

@@ -80,12 +80,12 @@ pub(crate) struct CameraController {
 
 impl Default for CameraController {
     fn default() -> Self {
-        Self { speed: 0.1 }
+        Self { speed: 6.0 }
     }
 }
 
 impl CameraController {
-    pub(crate) fn compute(&self, input_state: &InputState) -> CameraDisplacement {
+    pub(crate) fn compute(&self, input_state: &InputState, dt: f32) -> CameraDisplacement {
         let mut translation = glam::Vec3::ZERO;
 
         if input_state.is_pressed(KeyCode::KeyA) {
@@ -108,7 +108,7 @@ impl CameraController {
         }
 
         CameraDisplacement {
-            translation: translation.normalize_or_zero() * self.speed,
+            translation: translation.normalize_or_zero() * self.speed * dt,
         }
     }
 }
