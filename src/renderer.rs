@@ -5,7 +5,6 @@ use crate::input::InputHandler;
 use crate::vertex::{INDICES, VERTICES, Vertex};
 use crate::viewport::Viewport;
 use egui::vec2;
-use glam::Vec3;
 use pollster::FutureExt;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -253,28 +252,28 @@ impl Renderer {
     }
 
     pub(crate) fn update(&mut self, input_handler: &InputHandler) {
-        let mut direction = Vec3::ZERO;
+        let mut direction = glam::Vec3::ZERO;
 
         if input_handler.contains(KeyCode::KeyA) {
-            direction -= Vec3::X;
+            direction -= glam::Vec3::X;
         }
         if input_handler.contains(KeyCode::KeyD) {
-            direction += Vec3::X;
+            direction += glam::Vec3::X;
         }
         if input_handler.contains(KeyCode::KeyQ) {
-            direction += Vec3::Y;
+            direction += glam::Vec3::Y;
         }
         if input_handler.contains(KeyCode::KeyE) {
-            direction -= Vec3::Y;
+            direction -= glam::Vec3::Y;
         }
         if input_handler.contains(KeyCode::KeyW) {
-            direction -= Vec3::Z;
+            direction -= glam::Vec3::Z;
         }
         if input_handler.contains(KeyCode::KeyS) {
-            direction += Vec3::Z;
+            direction += glam::Vec3::Z;
         }
 
-        if direction != Vec3::ZERO {
+        if direction != glam::Vec3::ZERO {
             self.camera.update(direction);
             self.update_camera_uniform_buffer();
         }

@@ -49,25 +49,24 @@ impl ApplicationHandler for App {
             WindowEvent::Focused(false) => {
                 self.input_handler.clear();
             }
-            WindowEvent::KeyboardInput { event, .. } => {
-                match event {
+            WindowEvent::KeyboardInput {
+                event:
                     KeyEvent {
                         physical_key: PhysicalKey::Code(key_code),
                         state,
                         ..
-                    } => {
-                        match state {
-                            ElementState::Pressed => {
-                                if !response.consumed {
-                                    self.input_handler.key_pressed(key_code);
-                                }
-                            }
-                            ElementState::Released => {
-                                self.input_handler.key_released(key_code);
-                            }
+                    },
+                ..
+            } => {
+                match state {
+                    ElementState::Pressed => {
+                        if !response.consumed {
+                            self.input_handler.key_pressed(key_code);
                         }
                     }
-                    _ => {}
+                    ElementState::Released => {
+                        self.input_handler.key_released(key_code);
+                    }
                 }
             }
             _ => {}

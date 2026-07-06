@@ -1,5 +1,4 @@
 use glam::camera::rh::{proj::directx, view};
-use glam::{Mat4, Vec3};
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -10,7 +9,7 @@ pub(crate) struct CameraUniform {
 impl CameraUniform {
     pub(crate) fn new() -> Self {
         Self {
-            view_projection_matrix: Mat4::IDENTITY.to_cols_array_2d(),
+            view_projection_matrix: glam::Mat4::IDENTITY.to_cols_array_2d(),
         }
     }
 
@@ -20,9 +19,9 @@ impl CameraUniform {
 }
 
 pub(crate) struct CameraDescriptor {
-    pub(crate) eye: Vec3,
-    pub(crate) target: Vec3,
-    pub(crate) up: Vec3,
+    pub(crate) eye: glam::Vec3,
+    pub(crate) target: glam::Vec3,
+    pub(crate) up: glam::Vec3,
     pub(crate) aspect: f32,
     pub(crate) fovy: f32,
     pub(crate) znear: f32,
@@ -30,9 +29,9 @@ pub(crate) struct CameraDescriptor {
 }
 
 pub(crate) struct Camera {
-    eye: Vec3,
-    target: Vec3,
-    up: Vec3,
+    eye: glam::Vec3,
+    target: glam::Vec3,
+    up: glam::Vec3,
     aspect: f32,
     fovy: f32,
     znear: f32,
@@ -52,14 +51,14 @@ impl Camera {
         }
     }
 
-    pub(crate) fn build_view_projection_matrix(&self) -> Mat4 {
+    pub(crate) fn build_view_projection_matrix(&self) -> glam::Mat4 {
         let view = view::look_at_mat4(self.eye, self.target, self.up);
         let proj = directx::perspective(self.fovy.to_radians(), self.aspect, self.znear, self.zfar);
 
         proj * view
     }
 
-    pub(crate) fn update(&mut self, direction: Vec3) {
+    pub(crate) fn update(&mut self, direction: glam::Vec3) {
         self.eye += direction * 0.1;
         self.target += direction * 0.1;
     }
