@@ -1,13 +1,11 @@
-use crate::camera::{Camera, CameraDescriptor, CameraUniform};
+use crate::camera::{Camera, CameraUniform};
 use crate::editor;
 use crate::gpu::Gpu;
 use crate::gui::Gui;
-use crate::input::InputState;
 use crate::vertex::{INDICES, VERTICES, Vertex};
 use crate::viewport::Viewport;
 use wgpu::util::DeviceExt;
 use wgpu::{Color, CurrentSurfaceTexture, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
-use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 pub(crate) struct Renderer {
@@ -16,7 +14,6 @@ pub(crate) struct Renderer {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
 
-    camera: Camera,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -25,7 +22,7 @@ pub(crate) struct Renderer {
 }
 
 impl Renderer {
-    pub(crate) fn new(gpu: &Gpu, gui: &mut Gui) -> Self {
+    pub(crate) fn new(camera: &Camera, gpu: &Gpu, gui: &mut Gui) -> Self {
         let shader_module = gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
@@ -45,18 +42,8 @@ impl Renderer {
 
         let num_indices = INDICES.len() as u32;
 
-        let camera = Camera::new(&CameraDescriptor {
-            eye: glam::vec3(0.0, 0.0, 2.0),
-            target: glam::Vec3::ZERO,
-            up: glam::Vec3::Y,
-            aspect: gpu.config.width as f32 / gpu.config.height as f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
-        });
-
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_projection_matrix(&camera);
+        camera_uniform.update_view_projection_matrix(camera);
 
         let camera_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("camera-buffer"),
@@ -126,7 +113,6 @@ impl Renderer {
             vertex_buffer,
             index_buffer,
             num_indices,
-            camera,
             camera_uniform,
             camera_buffer,
             camera_bind_group,
@@ -134,7 +120,7 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn render(&mut self, window: &Window, gpu: &Gpu, gui: &mut Gui) {
+    pub(crate) fn render(&mut self, window: &Window, camera: &mut Camera, gpu: &Gpu, gui: &mut Gui) {
         let frame = match gpu.surface.get_current_texture() {
             CurrentSurfaceTexture::Success(frame) => frame,
             CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -176,43 +162,16 @@ impl Renderer {
             viewport_size = editor::build(ui, self.viewport.texture_id);
         });
 
+        if viewport_size.x > 0.0 && viewport_size.y > 0.0 {
+            self.resize_viewport(camera, gpu, gui, viewport_size);
+        }
+
+        self.update_camera_uniform_buffer(camera, gpu);
         gpu.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
-
-        if viewport_size.x > 0.0 && viewport_size.y > 0.0 {
-            self.resize_viewport(gpu, gui, viewport_size);
-        }
     }
 
-    pub(crate) fn update(&mut self, input_handler: &InputState, gpu: &Gpu) {
-        let mut direction = glam::Vec3::ZERO;
-
-        if input_handler.is_pressed(KeyCode::KeyA) {
-            direction -= glam::Vec3::X;
-        }
-        if input_handler.is_pressed(KeyCode::KeyD) {
-            direction += glam::Vec3::X;
-        }
-        if input_handler.is_pressed(KeyCode::KeyQ) {
-            direction += glam::Vec3::Y;
-        }
-        if input_handler.is_pressed(KeyCode::KeyE) {
-            direction -= glam::Vec3::Y;
-        }
-        if input_handler.is_pressed(KeyCode::KeyW) {
-            direction -= glam::Vec3::Z;
-        }
-        if input_handler.is_pressed(KeyCode::KeyS) {
-            direction += glam::Vec3::Z;
-        }
-
-        if direction != glam::Vec3::ZERO {
-            self.camera.update(direction);
-            self.update_camera_uniform_buffer(gpu);
-        }
-    }
-
-    fn resize_viewport(&mut self, gpu: &Gpu, gui: &mut Gui, size: egui::Vec2) {
+    fn resize_viewport(&mut self, camera: &mut Camera, gpu: &Gpu, gui: &mut Gui, size: egui::Vec2) {
         let pixels_per_point = gui.pixels_per_point();
         let width = (size.x * pixels_per_point).round() as u32;
         let height = (size.y * pixels_per_point).round() as u32;
@@ -226,13 +185,11 @@ impl Renderer {
         }
 
         self.viewport.resize(&gpu.device, gui, width, height);
-
-        self.camera.update_aspect_ratio(size.x / size.y);
-        self.update_camera_uniform_buffer(gpu);
+        camera.update_aspect_ratio(size.x / size.y);
     }
 
-    fn update_camera_uniform_buffer(&mut self, gpu: &Gpu) {
-        self.camera_uniform.update_view_projection_matrix(&self.camera);
+    fn update_camera_uniform_buffer(&mut self, camera: &Camera, gpu: &Gpu) {
+        self.camera_uniform.update_view_projection_matrix(camera);
         gpu.queue
             .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]));
     }

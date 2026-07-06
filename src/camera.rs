@@ -1,4 +1,6 @@
+use crate::input::InputState;
 use glam::camera::rh::{proj::directx, view};
+use winit::keyboard::KeyCode;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -58,12 +60,55 @@ impl Camera {
         proj * view
     }
 
-    pub(crate) fn update(&mut self, direction: glam::Vec3) {
-        self.eye += direction * 0.1;
-        self.target += direction * 0.1;
+    pub(crate) fn displace(&mut self, displacement: CameraDisplacement) {
+        self.eye += displacement.translation;
+        self.target += displacement.translation;
     }
 
     pub(crate) fn update_aspect_ratio(&mut self, aspect: f32) {
         self.aspect = aspect;
+    }
+}
+
+pub(crate) struct CameraDisplacement {
+    translation: glam::Vec3,
+}
+
+pub(crate) struct CameraController {
+    speed: f32,
+}
+
+impl Default for CameraController {
+    fn default() -> Self {
+        Self { speed: 0.1 }
+    }
+}
+
+impl CameraController {
+    pub(crate) fn compute(&self, input_state: &InputState) -> CameraDisplacement {
+        let mut translation = glam::Vec3::ZERO;
+
+        if input_state.is_pressed(KeyCode::KeyA) {
+            translation -= glam::Vec3::X;
+        }
+        if input_state.is_pressed(KeyCode::KeyD) {
+            translation += glam::Vec3::X;
+        }
+        if input_state.is_pressed(KeyCode::KeyQ) {
+            translation += glam::Vec3::Y;
+        }
+        if input_state.is_pressed(KeyCode::KeyE) {
+            translation -= glam::Vec3::Y;
+        }
+        if input_state.is_pressed(KeyCode::KeyW) {
+            translation -= glam::Vec3::Z;
+        }
+        if input_state.is_pressed(KeyCode::KeyS) {
+            translation += glam::Vec3::Z;
+        }
+
+        CameraDisplacement {
+            translation: translation.normalize_or_zero() * self.speed,
+        }
     }
 }

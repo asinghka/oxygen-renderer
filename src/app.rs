@@ -1,3 +1,4 @@
+use crate::camera::{Camera, CameraController, CameraDescriptor};
 use crate::gpu::Gpu;
 use crate::gui::Gui;
 use crate::input::InputState;
@@ -15,6 +16,7 @@ const APP_NAME: &str = "Oxygen";
 #[derive(Default)]
 pub(crate) struct App {
     app_state: Option<AppState>,
+    camera_controller: CameraController,
     input_state: InputState,
 }
 
@@ -33,9 +35,19 @@ impl ApplicationHandler for App {
         let gpu = Gpu::new(window.clone());
         let mut gui = Gui::new(&window, &gpu.device, gpu.config.format);
 
-        let renderer = Renderer::new(&gpu, &mut gui);
+        let camera = Camera::new(&CameraDescriptor {
+            eye: glam::vec3(0.0, 0.0, 2.0),
+            target: glam::Vec3::ZERO,
+            up: glam::Vec3::Y,
+            aspect: gpu.config.width as f32 / gpu.config.height as f32,
+            fovy: 45.0,
+            znear: 0.1,
+            zfar: 100.0,
+        });
 
-        self.app_state = Some(AppState::new(window, gpu, renderer, gui));
+        let renderer = Renderer::new(&camera, &gpu, &mut gui);
+
+        self.app_state = Some(AppState::new(window, camera, gpu, renderer, gui));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
@@ -48,10 +60,15 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                app_state.renderer.update(&self.input_state, &app_state.gpu);
-                app_state.renderer.render(&app_state.window, &app_state.gpu, &mut app_state.gui);
+                let displacement = self.camera_controller.compute(&self.input_state);
+                app_state.camera.displace(displacement);
+                app_state
+                    .renderer
+                    .render(&app_state.window, &mut app_state.camera, &app_state.gpu, &mut app_state.gui);
             }
             WindowEvent::Resized(size) => {
+                // This only needs to resize the surface as the viewport texture size is handled
+                // in the renderer
                 app_state.gpu.resize(size);
             }
             WindowEvent::Focused(false) => {
