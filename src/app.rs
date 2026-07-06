@@ -1,5 +1,6 @@
-use crate::input::InputHandler;
+use crate::input::InputState;
 use crate::renderer::Renderer;
+use crate::state::AppState;
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
@@ -11,8 +12,8 @@ const APP_NAME: &str = "Oxygen";
 
 #[derive(Default)]
 pub(crate) struct App {
-    renderer: Option<Renderer>,
-    input_handler: InputHandler,
+    app_state: Option<AppState>,
+    input_state: InputState,
 }
 
 impl ApplicationHandler for App {
@@ -27,27 +28,27 @@ impl ApplicationHandler for App {
                 .expect("Failed to create window"),
         );
 
-        self.renderer = Some(Renderer::new(window));
+        self.app_state = Some(AppState::new(window.clone(), Renderer::new(window)));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
-        let Some(renderer) = &mut self.renderer else { return };
+        let Some(app_state) = &mut self.app_state else { return };
 
-        let response = renderer.gui.on_window_event(&renderer.window, &event);
+        let response = app_state.renderer.gui.on_window_event(&app_state.window, &event);
 
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                renderer.update(&self.input_handler);
-                renderer.render();
+                app_state.renderer.update(&self.input_state);
+                app_state.renderer.render(&app_state.window);
             }
             WindowEvent::Resized(size) => {
-                renderer.resize(size);
+                app_state.renderer.resize(size);
             }
             WindowEvent::Focused(false) => {
-                self.input_handler.clear();
+                self.input_state.clear();
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -61,11 +62,11 @@ impl ApplicationHandler for App {
                 match state {
                     ElementState::Pressed => {
                         if !response.consumed {
-                            self.input_handler.key_pressed(key_code);
+                            self.input_state.press(key_code);
                         }
                     }
                     ElementState::Released => {
-                        self.input_handler.key_released(key_code);
+                        self.input_state.release(key_code);
                     }
                 }
             }
@@ -74,7 +75,7 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(state) = self.renderer.as_ref() {
+        if let Some(state) = self.app_state.as_ref() {
             state.window.request_redraw();
         }
     }

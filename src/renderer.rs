@@ -1,7 +1,7 @@
 use crate::camera::{Camera, CameraDescriptor, CameraUniform};
 use crate::editor;
 use crate::gui::Gui;
-use crate::input::InputHandler;
+use crate::input::InputState;
 use crate::vertex::{INDICES, VERTICES, Vertex};
 use crate::viewport::Viewport;
 use egui::vec2;
@@ -16,7 +16,6 @@ use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 pub(crate) struct Renderer {
-    pub(crate) window: Arc<Window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
@@ -188,7 +187,6 @@ impl Renderer {
         let viewport = Viewport::new(&device, &mut gui, config.width, config.height);
 
         Self {
-            window,
             device,
             queue,
             surface,
@@ -206,7 +204,7 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn render(&mut self) {
+    pub(crate) fn render(&mut self, window: &Window) {
         let frame = match self.surface.get_current_texture() {
             CurrentSurfaceTexture::Success(frame) => frame,
             CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -243,7 +241,7 @@ impl Renderer {
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
-        self.gui.render(&self.window, &self.device, &self.queue, &mut encoder, &view, |ui| {
+        self.gui.render(window, &self.device, &self.queue, &mut encoder, &view, |ui| {
             editor::build(ui, self.viewport.texture_id, vec2(self.config.width as f32, self.config.height as f32));
         });
 
@@ -251,25 +249,25 @@ impl Renderer {
         frame.present();
     }
 
-    pub(crate) fn update(&mut self, input_handler: &InputHandler) {
+    pub(crate) fn update(&mut self, input_handler: &InputState) {
         let mut direction = glam::Vec3::ZERO;
 
-        if input_handler.contains(KeyCode::KeyA) {
+        if input_handler.is_pressed(KeyCode::KeyA) {
             direction -= glam::Vec3::X;
         }
-        if input_handler.contains(KeyCode::KeyD) {
+        if input_handler.is_pressed(KeyCode::KeyD) {
             direction += glam::Vec3::X;
         }
-        if input_handler.contains(KeyCode::KeyQ) {
+        if input_handler.is_pressed(KeyCode::KeyQ) {
             direction += glam::Vec3::Y;
         }
-        if input_handler.contains(KeyCode::KeyE) {
+        if input_handler.is_pressed(KeyCode::KeyE) {
             direction -= glam::Vec3::Y;
         }
-        if input_handler.contains(KeyCode::KeyW) {
+        if input_handler.is_pressed(KeyCode::KeyW) {
             direction -= glam::Vec3::Z;
         }
-        if input_handler.contains(KeyCode::KeyS) {
+        if input_handler.is_pressed(KeyCode::KeyS) {
             direction += glam::Vec3::Z;
         }
 

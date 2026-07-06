@@ -4,6 +4,7 @@ mod editor;
 mod gui;
 mod input;
 mod renderer;
+mod state;
 mod style;
 mod vertex;
 mod viewport;

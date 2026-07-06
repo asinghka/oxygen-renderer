@@ -1,20 +1,20 @@
 use std::collections::HashSet;
 
 #[derive(Default)]
-pub(crate) struct InputHandler {
+pub(crate) struct InputState {
     pressed_keys: HashSet<winit::keyboard::KeyCode>,
 }
 
-impl InputHandler {
-    pub(crate) fn contains(&self, key: winit::keyboard::KeyCode) -> bool {
+impl InputState {
+    pub(crate) fn is_pressed(&self, key: winit::keyboard::KeyCode) -> bool {
         self.pressed_keys.contains(&key)
     }
 
-    pub(crate) fn key_pressed(&mut self, key: winit::keyboard::KeyCode) {
+    pub(crate) fn press(&mut self, key: winit::keyboard::KeyCode) {
         self.pressed_keys.insert(key);
     }
 
-    pub(crate) fn key_released(&mut self, key: winit::keyboard::KeyCode) {
+    pub(crate) fn release(&mut self, key: winit::keyboard::KeyCode) {
         self.pressed_keys.remove(&key);
     }
 
