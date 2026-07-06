@@ -1,3 +1,4 @@
+use crate::gpu::Gpu;
 use crate::input::InputState;
 use crate::renderer::Renderer;
 use crate::state::AppState;
@@ -28,7 +29,10 @@ impl ApplicationHandler for App {
                 .expect("Failed to create window"),
         );
 
-        self.app_state = Some(AppState::new(window.clone(), Renderer::new(window)));
+        let gpu = Gpu::new(window.clone());
+        let renderer = Renderer::new(window.clone(), &gpu);
+
+        self.app_state = Some(AppState::new(window, gpu, renderer));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
@@ -41,11 +45,11 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                app_state.renderer.update(&self.input_state);
-                app_state.renderer.render(&app_state.window);
+                app_state.renderer.update(&self.input_state, &app_state.gpu);
+                app_state.renderer.render(&app_state.window, &app_state.gpu);
             }
             WindowEvent::Resized(size) => {
-                app_state.renderer.resize(size);
+                app_state.gpu.resize(size);
             }
             WindowEvent::Focused(false) => {
                 self.input_state.clear();

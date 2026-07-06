@@ -1,26 +1,17 @@
 use crate::camera::{Camera, CameraDescriptor, CameraUniform};
 use crate::editor;
+use crate::gpu::Gpu;
 use crate::gui::Gui;
 use crate::input::InputState;
 use crate::vertex::{INDICES, VERTICES, Vertex};
 use crate::viewport::Viewport;
-use egui::vec2;
-use pollster::FutureExt;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
-use wgpu::{
-    Backends, Color, CurrentSurfaceTexture, Features, LoadOp, Operations, PowerPreference, ShaderSource, StoreOp, TextureFormat, TextureUsages,
-};
-use winit::dpi::PhysicalSize;
+use wgpu::{Color, CurrentSurfaceTexture, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 pub(crate) struct Renderer {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    surface: wgpu::Surface<'static>,
-    config: wgpu::SurfaceConfiguration,
-
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -36,72 +27,19 @@ pub(crate) struct Renderer {
 }
 
 impl Renderer {
-    pub(crate) fn new(window: Arc<Window>) -> Self {
-        let size = window.inner_size();
-
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: Backends::PRIMARY,
-            flags: Default::default(),
-            memory_budget_thresholds: Default::default(),
-            backend_options: Default::default(),
-            display: None,
-        });
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: PowerPreference::HighPerformance,
-                force_fallback_adapter: false,
-                compatible_surface: None,
-            })
-            .block_on()
-            .expect("Failed to create an adapter");
-
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                label: Some("device"),
-                required_features: Features::empty(),
-                required_limits: Default::default(),
-                experimental_features: Default::default(),
-                memory_hints: Default::default(),
-                trace: Default::default(),
-            })
-            .block_on()
-            .expect("Failed to create a device");
-
-        let surface = instance.create_surface(window.clone()).expect("Failed to create surface");
-        let surface_capabilities = surface.get_capabilities(&adapter);
-        let surface_format = surface_capabilities
-            .formats
-            .iter()
-            .find(|f| f.is_srgb())
-            .copied()
-            .unwrap_or(surface_capabilities.formats[0]);
-
-        let config = wgpu::SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
-            width: size.width,
-            height: size.height,
-            present_mode: surface_capabilities.present_modes[0],
-            desired_maximum_frame_latency: 2,
-            alpha_mode: surface_capabilities.alpha_modes[0],
-            view_formats: vec![],
-        };
-
-        surface.configure(&device, &config);
-
-        let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+    pub(crate) fn new(window: Arc<Window>, gpu: &Gpu) -> Self {
+        let shader_module = gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let vertex_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("vertex-buffer"),
             contents: bytemuck::cast_slice(VERTICES),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let index_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("index-buffer"),
             contents: bytemuck::cast_slice(INDICES),
             usage: wgpu::BufferUsages::INDEX,
@@ -113,7 +51,7 @@ impl Renderer {
             eye: glam::vec3(0.0, 0.0, 2.0),
             target: glam::Vec3::ZERO,
             up: glam::Vec3::Y,
-            aspect: config.width as f32 / config.height as f32,
+            aspect: gpu.config.width as f32 / gpu.config.height as f32,
             fovy: 45.0,
             znear: 0.1,
             zfar: 100.0,
@@ -122,13 +60,13 @@ impl Renderer {
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_projection_matrix(&camera);
 
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let camera_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("camera-buffer"),
             contents: bytemuck::cast_slice(&[camera_uniform]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let camera_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("camera-bind-group-layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -142,7 +80,7 @@ impl Renderer {
             }],
         });
 
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let camera_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("camera-bind-group"),
             layout: &camera_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
@@ -151,13 +89,13 @@ impl Renderer {
             }],
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let pipeline_layout = gpu.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline-layout"),
             bind_group_layouts: &[Some(&camera_bind_group_layout)],
             immediate_size: 0,
         });
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let render_pipeline = gpu.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("render-pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
@@ -183,14 +121,10 @@ impl Renderer {
             cache: None,
         });
 
-        let mut gui = Gui::new(&window, &device, surface_format);
-        let viewport = Viewport::new(&device, &mut gui, config.width, config.height);
+        let mut gui = Gui::new(&window, &gpu.device, gpu.config.format);
+        let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
 
         Self {
-            device,
-            queue,
-            surface,
-            config,
             render_pipeline,
             vertex_buffer,
             index_buffer,
@@ -204,8 +138,8 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn render(&mut self, window: &Window) {
-        let frame = match self.surface.get_current_texture() {
+    pub(crate) fn render(&mut self, window: &Window, gpu: &Gpu) {
+        let frame = match gpu.surface.get_current_texture() {
             CurrentSurfaceTexture::Success(frame) => frame,
             CurrentSurfaceTexture::Suboptimal(frame) => frame,
             _ => return,
@@ -213,7 +147,7 @@ impl Renderer {
 
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -241,15 +175,20 @@ impl Renderer {
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
-        self.gui.render(window, &self.device, &self.queue, &mut encoder, &view, |ui| {
-            editor::build(ui, self.viewport.texture_id, vec2(self.config.width as f32, self.config.height as f32));
+        let mut viewport_size = egui::Vec2::ZERO;
+        self.gui.render(window, &gpu.device, &gpu.queue, &mut encoder, &view, |ui| {
+            viewport_size = editor::build(ui, self.viewport.texture_id);
         });
 
-        self.queue.submit(std::iter::once(encoder.finish()));
+        gpu.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
+
+        if viewport_size.x > 0.0 && viewport_size.y > 0.0 {
+            self.resize_viewport(gpu, viewport_size);
+        }
     }
 
-    pub(crate) fn update(&mut self, input_handler: &InputState) {
+    pub(crate) fn update(&mut self, input_handler: &InputState, gpu: &Gpu) {
         let mut direction = glam::Vec3::ZERO;
 
         if input_handler.is_pressed(KeyCode::KeyA) {
@@ -273,26 +212,32 @@ impl Renderer {
 
         if direction != glam::Vec3::ZERO {
             self.camera.update(direction);
-            self.update_camera_uniform_buffer();
+            self.update_camera_uniform_buffer(gpu);
         }
     }
 
-    pub(crate) fn resize(&mut self, size: PhysicalSize<u32>) {
-        if size.width == 0 || size.height == 0 {
+    fn resize_viewport(&mut self, gpu: &Gpu, size: egui::Vec2) {
+        let pixels_per_point = self.gui.pixels_per_point();
+        let width = (size.x * pixels_per_point).round() as u32;
+        let height = (size.y * pixels_per_point).round() as u32;
+
+        if width == 0 || height == 0 {
             return;
         }
 
-        self.config.width = size.width;
-        self.config.height = size.height;
-        self.surface.configure(&self.device, &self.config);
+        if self.viewport.width == width && self.viewport.height == height {
+            return;
+        }
 
-        self.camera.update_aspect_ratio(size.width as f32 / size.height as f32);
-        self.update_camera_uniform_buffer();
+        self.viewport.resize(&gpu.device, &mut self.gui, width, height);
+
+        self.camera.update_aspect_ratio(size.x / size.y);
+        self.update_camera_uniform_buffer(gpu);
     }
 
-    fn update_camera_uniform_buffer(&mut self) {
+    fn update_camera_uniform_buffer(&mut self, gpu: &Gpu) {
         self.camera_uniform.update_view_projection_matrix(&self.camera);
-        self.queue
+        gpu.queue
             .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]));
     }
 }

@@ -1,6 +1,7 @@
 mod app;
 mod camera;
 mod editor;
+mod gpu;
 mod gui;
 mod input;
 mod renderer;
