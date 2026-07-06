@@ -1,4 +1,5 @@
 use crate::gpu::Gpu;
+use crate::gui::Gui;
 use crate::input::InputState;
 use crate::renderer::Renderer;
 use crate::state::AppState;
@@ -30,15 +31,17 @@ impl ApplicationHandler for App {
         );
 
         let gpu = Gpu::new(window.clone());
-        let renderer = Renderer::new(window.clone(), &gpu);
+        let mut gui = Gui::new(&window, &gpu.device, gpu.config.format);
 
-        self.app_state = Some(AppState::new(window, gpu, renderer));
+        let renderer = Renderer::new(&gpu, &mut gui);
+
+        self.app_state = Some(AppState::new(window, gpu, renderer, gui));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
         let Some(app_state) = &mut self.app_state else { return };
 
-        let response = app_state.renderer.gui.on_window_event(&app_state.window, &event);
+        let response = app_state.gui.on_window_event(&app_state.window, &event);
 
         match event {
             WindowEvent::CloseRequested => {
@@ -46,7 +49,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 app_state.renderer.update(&self.input_state, &app_state.gpu);
-                app_state.renderer.render(&app_state.window, &app_state.gpu);
+                app_state.renderer.render(&app_state.window, &app_state.gpu, &mut app_state.gui);
             }
             WindowEvent::Resized(size) => {
                 app_state.gpu.resize(size);

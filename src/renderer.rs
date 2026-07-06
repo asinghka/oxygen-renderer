@@ -5,7 +5,6 @@ use crate::gui::Gui;
 use crate::input::InputState;
 use crate::vertex::{INDICES, VERTICES, Vertex};
 use crate::viewport::Viewport;
-use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use wgpu::{Color, CurrentSurfaceTexture, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 use winit::keyboard::KeyCode;
@@ -22,12 +21,11 @@ pub(crate) struct Renderer {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 
-    pub(crate) gui: Gui,
     viewport: Viewport,
 }
 
 impl Renderer {
-    pub(crate) fn new(window: Arc<Window>, gpu: &Gpu) -> Self {
+    pub(crate) fn new(gpu: &Gpu, gui: &mut Gui) -> Self {
         let shader_module = gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
@@ -121,8 +119,7 @@ impl Renderer {
             cache: None,
         });
 
-        let mut gui = Gui::new(&window, &gpu.device, gpu.config.format);
-        let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
+        let viewport = Viewport::new(&gpu.device, gui, gpu.config.width, gpu.config.height);
 
         Self {
             render_pipeline,
@@ -133,12 +130,11 @@ impl Renderer {
             camera_uniform,
             camera_buffer,
             camera_bind_group,
-            gui,
             viewport,
         }
     }
 
-    pub(crate) fn render(&mut self, window: &Window, gpu: &Gpu) {
+    pub(crate) fn render(&mut self, window: &Window, gpu: &Gpu, gui: &mut Gui) {
         let frame = match gpu.surface.get_current_texture() {
             CurrentSurfaceTexture::Success(frame) => frame,
             CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -176,7 +172,7 @@ impl Renderer {
         }
 
         let mut viewport_size = egui::Vec2::ZERO;
-        self.gui.render(window, &gpu.device, &gpu.queue, &mut encoder, &view, |ui| {
+        gui.render(window, &gpu.device, &gpu.queue, &mut encoder, &view, |ui| {
             viewport_size = editor::build(ui, self.viewport.texture_id);
         });
 
@@ -184,7 +180,7 @@ impl Renderer {
         frame.present();
 
         if viewport_size.x > 0.0 && viewport_size.y > 0.0 {
-            self.resize_viewport(gpu, viewport_size);
+            self.resize_viewport(gpu, gui, viewport_size);
         }
     }
 
@@ -216,8 +212,8 @@ impl Renderer {
         }
     }
 
-    fn resize_viewport(&mut self, gpu: &Gpu, size: egui::Vec2) {
-        let pixels_per_point = self.gui.pixels_per_point();
+    fn resize_viewport(&mut self, gpu: &Gpu, gui: &mut Gui, size: egui::Vec2) {
+        let pixels_per_point = gui.pixels_per_point();
         let width = (size.x * pixels_per_point).round() as u32;
         let height = (size.y * pixels_per_point).round() as u32;
 
@@ -229,7 +225,7 @@ impl Renderer {
             return;
         }
 
-        self.viewport.resize(&gpu.device, &mut self.gui, width, height);
+        self.viewport.resize(&gpu.device, gui, width, height);
 
         self.camera.update_aspect_ratio(size.x / size.y);
         self.update_camera_uniform_buffer(gpu);
