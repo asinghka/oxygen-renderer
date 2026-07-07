@@ -89,7 +89,15 @@ impl Renderer {
                 compilation_options: Default::default(),
                 buffers: &[Vertex::layout()],
             },
-            primitive: wgpu::PrimitiveState::default(),
+            primitive: wgpu::PrimitiveState {
+                topology: Default::default(),
+                strip_index_format: None,
+                front_face: Default::default(),
+                cull_mode: Some(wgpu::Face::Back),
+                unclipped_depth: false,
+                polygon_mode: Default::default(),
+                conservative: false,
+            },
             depth_stencil: None,
             multisample: Default::default(),
             fragment: Some(wgpu::FragmentState {

@@ -7,7 +7,7 @@ use crate::state::AppState;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, KeyEvent, WindowEvent};
+use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowId};
@@ -39,7 +39,8 @@ impl ApplicationHandler for App {
 
         let camera = Camera::new(&CameraDescriptor {
             eye: glam::vec3(0.0, 0.0, 2.0),
-            target: glam::Vec3::ZERO,
+            yaw: 0.0,
+            pitch: 0.0,
             up: glam::Vec3::Y,
             aspect: gpu.config.width as f32 / gpu.config.height as f32,
             fovy: 45.0,
@@ -66,7 +67,7 @@ impl ApplicationHandler for App {
                 let dt = self.last_frame_time.map_or(0.0, |last| (now - last).as_secs_f32()).min(0.1);
                 self.last_frame_time = Some(now);
 
-                let displacement = self.camera_controller.compute(&self.input_state, dt);
+                let displacement = self.camera_controller.compute(&mut self.input_state, dt);
                 app_state.camera.displace(displacement);
                 app_state
                     .renderer
@@ -102,6 +103,17 @@ impl ApplicationHandler for App {
             }
             _ => {}
         };
+    }
+
+    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                self.input_state.add_mouse_delta(delta.0 as f32, delta.1 as f32);
+            }
+            DeviceEvent::MouseWheel { .. } => {}
+            DeviceEvent::Key(_) => {}
+            _ => {}
+        }
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {

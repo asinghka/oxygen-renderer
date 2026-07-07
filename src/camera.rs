@@ -22,7 +22,8 @@ impl CameraUniform {
 
 pub(crate) struct CameraDescriptor {
     pub(crate) eye: glam::Vec3,
-    pub(crate) target: glam::Vec3,
+    pub(crate) yaw: f32,
+    pub(crate) pitch: f32,
     pub(crate) up: glam::Vec3,
     pub(crate) aspect: f32,
     pub(crate) fovy: f32,
@@ -32,7 +33,8 @@ pub(crate) struct CameraDescriptor {
 
 pub(crate) struct Camera {
     eye: glam::Vec3,
-    target: glam::Vec3,
+    yaw: f32,
+    pitch: f32,
     up: glam::Vec3,
     aspect: f32,
     fovy: f32,
@@ -44,7 +46,8 @@ impl Camera {
     pub(crate) fn new(camera_descriptor: &CameraDescriptor) -> Self {
         Self {
             eye: camera_descriptor.eye,
-            target: camera_descriptor.target,
+            yaw: camera_descriptor.yaw,
+            pitch: camera_descriptor.pitch,
             up: camera_descriptor.up,
             aspect: camera_descriptor.aspect,
             fovy: camera_descriptor.fovy,
@@ -54,15 +57,28 @@ impl Camera {
     }
 
     pub(crate) fn build_view_projection_matrix(&self) -> glam::Mat4 {
-        let view = view::look_at_mat4(self.eye, self.target, self.up);
+        let target = self.eye + self.forward();
+
+        let view = view::look_at_mat4(self.eye, target, self.up);
         let proj = directx::perspective(self.fovy.to_radians(), self.aspect, self.znear, self.zfar);
 
         proj * view
     }
 
     pub(crate) fn displace(&mut self, displacement: CameraDisplacement) {
-        self.eye += displacement.translation;
-        self.target += displacement.translation;
+        self.yaw += displacement.yaw;
+        self.pitch = (self.pitch + displacement.pitch).clamp(-89.0_f32.to_radians(), 89.0_f32.to_radians());
+
+        self.eye += self.basis() * displacement.translation;
+    }
+
+    fn forward(&self) -> glam::Vec3 {
+        glam::Vec3::new(-self.yaw.sin() * self.pitch.cos(), self.pitch.sin(), -self.yaw.cos() * self.pitch.cos())
+    }
+
+    fn basis(&self) -> glam::Mat3 {
+        let forward = self.forward();
+        glam::Mat3::from_cols(forward.cross(self.up), self.up, forward)
     }
 
     pub(crate) fn update_aspect_ratio(&mut self, aspect: f32) {
@@ -72,27 +88,33 @@ impl Camera {
 
 pub(crate) struct CameraDisplacement {
     translation: glam::Vec3,
+    yaw: f32,
+    pitch: f32,
 }
 
 pub(crate) struct CameraController {
     speed: f32,
+    sensitivity: f32,
 }
 
 impl Default for CameraController {
     fn default() -> Self {
-        Self { speed: 6.0 }
+        Self {
+            speed: 6.0,
+            sensitivity: 0.004,
+        }
     }
 }
 
 impl CameraController {
-    pub(crate) fn compute(&self, input_state: &InputState, dt: f32) -> CameraDisplacement {
+    pub(crate) fn compute(&self, input_state: &mut InputState, dt: f32) -> CameraDisplacement {
         let mut translation = glam::Vec3::ZERO;
 
-        if input_state.is_pressed(KeyCode::KeyA) {
-            translation -= glam::Vec3::X;
-        }
         if input_state.is_pressed(KeyCode::KeyD) {
             translation += glam::Vec3::X;
+        }
+        if input_state.is_pressed(KeyCode::KeyA) {
+            translation -= glam::Vec3::X;
         }
         if input_state.is_pressed(KeyCode::KeyQ) {
             translation += glam::Vec3::Y;
@@ -101,14 +123,18 @@ impl CameraController {
             translation -= glam::Vec3::Y;
         }
         if input_state.is_pressed(KeyCode::KeyW) {
-            translation -= glam::Vec3::Z;
-        }
-        if input_state.is_pressed(KeyCode::KeyS) {
             translation += glam::Vec3::Z;
         }
+        if input_state.is_pressed(KeyCode::KeyS) {
+            translation -= glam::Vec3::Z;
+        }
+
+        let mouse_delta = input_state.take_mouse_delta();
 
         CameraDisplacement {
             translation: translation.normalize_or_zero() * self.speed * dt,
+            yaw: -mouse_delta.x * self.sensitivity,
+            pitch: -mouse_delta.y * self.sensitivity,
         }
     }
 }
