@@ -7,19 +7,31 @@ use crate::state::AppState;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
-use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
+use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::PhysicalKey;
-use winit::window::{Window, WindowId};
+use winit::window::{CursorGrabMode, Window, WindowId};
 
 const APP_NAME: &str = "Oxygen";
 
-#[derive(Default)]
 pub(crate) struct App {
     app_state: Option<AppState>,
     camera_controller: CameraController,
     input_state: InputState,
+    viewport_rect: egui::Rect,
     last_frame_time: Option<Instant>,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            app_state: None,
+            camera_controller: CameraController::default(),
+            input_state: InputState::default(),
+            viewport_rect: egui::Rect::NOTHING,
+            last_frame_time: None,
+        }
+    }
 }
 
 impl ApplicationHandler for App {
@@ -63,10 +75,22 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                if state == ElementState::Pressed {
-                    self.input_state.mouse_press(button);
-                } else {
-                    self.input_state.mouse_release(button);
+                match button {
+                    MouseButton::Right => {
+                        if state == ElementState::Pressed {
+                            let over_viewport = app_state.gui.pointer_pos().is_some_and(|p| self.viewport_rect.contains(p));
+                            if over_viewport {
+                                app_state.window.set_cursor_visible(false);
+                                let _ = app_state.window.set_cursor_grab(CursorGrabMode::Locked);
+                                self.input_state.mouse_press(button);
+                            }
+                        } else {
+                            app_state.window.set_cursor_visible(true);
+                            let _ = app_state.window.set_cursor_grab(CursorGrabMode::None);
+                            self.input_state.mouse_release(button);
+                        }
+                    }
+                    _ => {}
                 }
             }
             WindowEvent::RedrawRequested => {
@@ -76,7 +100,7 @@ impl ApplicationHandler for App {
 
                 let displacement = self.camera_controller.compute(&mut self.input_state, dt);
                 app_state.camera.displace(displacement);
-                app_state
+                self.viewport_rect = app_state
                     .renderer
                     .render(&app_state.window, &mut app_state.camera, &app_state.gpu, &mut app_state.gui);
             }
@@ -86,7 +110,8 @@ impl ApplicationHandler for App {
                 app_state.gpu.resize(size);
             }
             WindowEvent::Focused(false) => {
-                self.input_state.clear();
+                self.input_state.clear_mouse();
+                self.input_state.clear_keys();
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -115,9 +140,13 @@ impl ApplicationHandler for App {
     fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                self.input_state.add_mouse_delta(delta.0 as f32, delta.1 as f32);
+                self.input_state.add_mouse_pos_delta(delta.0 as f32, delta.1 as f32);
             }
-            DeviceEvent::MouseWheel { .. } => {}
+            DeviceEvent::MouseWheel {
+                delta: MouseScrollDelta::LineDelta(_, y),
+            } => {
+                self.input_state.add_mouse_scroll_delta(y);
+            }
             DeviceEvent::Key(_) => {}
             _ => {}
         }

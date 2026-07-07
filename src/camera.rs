@@ -69,6 +69,7 @@ impl Camera {
     pub(crate) fn displace(&mut self, displacement: CameraDisplacement) {
         self.yaw += displacement.yaw;
         self.pitch = (self.pitch + displacement.pitch).clamp(-89.0_f32.to_radians(), 89.0_f32.to_radians());
+        self.fovy = (self.fovy - displacement.fov).clamp(10.0_f32, 120.0_f32);
 
         self.eye += self.basis() * displacement.translation;
     }
@@ -89,6 +90,7 @@ impl Camera {
 
 pub(crate) struct CameraDisplacement {
     translation: glam::Vec3,
+    fov: f32,
     yaw: f32,
     pitch: f32,
 }
@@ -130,15 +132,18 @@ impl CameraController {
             translation -= glam::Vec3::Z;
         }
 
-        let mut mouse_delta = input_state.take_mouse_delta();
+        let mut mouse_pos_delta = input_state.take_mouse_pos_delta();
         if !input_state.is_mouse_button_pressed(MouseButton::Right) {
-            mouse_delta = glam::Vec2::ZERO;
+            mouse_pos_delta = glam::Vec2::ZERO;
         }
+
+        let mouse_scroll_delta = input_state.take_mouse_scroll_delta();
 
         CameraDisplacement {
             translation: translation.normalize_or_zero() * self.speed * dt,
-            yaw: -mouse_delta.x * self.sensitivity,
-            pitch: -mouse_delta.y * self.sensitivity,
+            fov: mouse_scroll_delta,
+            yaw: -mouse_pos_delta.x * self.sensitivity,
+            pitch: -mouse_pos_delta.y * self.sensitivity,
         }
     }
 }

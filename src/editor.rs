@@ -1,15 +1,13 @@
 use egui::Frame;
 use egui::load::SizedTexture;
 
-pub(crate) fn build(ui: &mut egui::Ui, texture_id: egui::TextureId) -> egui::Vec2 {
+pub(crate) fn build(ui: &mut egui::Ui, texture_id: egui::TextureId) -> egui::Rect {
+    egui::Panel::left("panel").show(ui, |ui| {
+        ui.take_available_space();
+    });
+
     egui::CentralPanel::default()
         .frame(Frame::NONE)
-        .show(ui, |ui| {
-            let size = ui.available_size();
-
-            ui.image(SizedTexture::new(texture_id, size));
-
-            size
-        })
+        .show(ui, |ui| ui.image(SizedTexture::new(texture_id, ui.available_size())).rect)
         .inner
 }

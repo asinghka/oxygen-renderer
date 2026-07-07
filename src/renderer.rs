@@ -128,11 +128,11 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn render(&mut self, window: &Window, camera: &mut Camera, gpu: &Gpu, gui: &mut Gui) {
+    pub(crate) fn render(&mut self, window: &Window, camera: &mut Camera, gpu: &Gpu, gui: &mut Gui) -> egui::Rect {
         let frame = match gpu.surface.get_current_texture() {
             CurrentSurfaceTexture::Success(frame) => frame,
             CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            _ => return,
+            _ => return egui::Rect::NOTHING,
         };
 
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -165,18 +165,20 @@ impl Renderer {
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
-        let mut viewport_size = egui::Vec2::ZERO;
+        let mut viewport_rect = egui::Rect::NOTHING;
         gui.render(window, &gpu.device, &gpu.queue, &mut encoder, &view, |ui| {
-            viewport_size = editor::build(ui, self.viewport.texture_id);
+            viewport_rect = editor::build(ui, self.viewport.texture_id);
         });
 
-        if viewport_size.x > 0.0 && viewport_size.y > 0.0 {
-            self.resize_viewport(camera, gpu, gui, viewport_size);
+        if viewport_rect.size().x > 0.0 && viewport_rect.size().y > 0.0 {
+            self.resize_viewport(camera, gpu, gui, viewport_rect.size());
         }
 
         self.update_camera_uniform_buffer(camera, gpu);
         gpu.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
+
+        viewport_rect
     }
 
     fn resize_viewport(&mut self, camera: &mut Camera, gpu: &Gpu, gui: &mut Gui, size: egui::Vec2) {

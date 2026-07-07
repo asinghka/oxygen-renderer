@@ -37,6 +37,10 @@ impl Gui {
         self.winit_state.on_window_event(window, event)
     }
 
+    pub(crate) fn pointer_pos(&self) -> Option<egui::Pos2> {
+        self.context.pointer_latest_pos()
+    }
+
     pub(crate) fn pixels_per_point(&self) -> f32 {
         self.context.pixels_per_point()
     }
