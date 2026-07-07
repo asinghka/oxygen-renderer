@@ -62,6 +62,13 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
+            WindowEvent::MouseInput { state, button, .. } => {
+                if state == ElementState::Pressed {
+                    self.input_state.mouse_press(button);
+                } else {
+                    self.input_state.mouse_release(button);
+                }
+            }
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();
                 let dt = self.last_frame_time.map_or(0.0, |last| (now - last).as_secs_f32()).min(0.1);
@@ -93,11 +100,11 @@ impl ApplicationHandler for App {
                 match state {
                     ElementState::Pressed => {
                         if !response.consumed {
-                            self.input_state.press(key_code);
+                            self.input_state.key_press(key_code);
                         }
                     }
                     ElementState::Released => {
-                        self.input_state.release(key_code);
+                        self.input_state.key_release(key_code);
                     }
                 }
             }
