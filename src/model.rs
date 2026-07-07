@@ -11,7 +11,9 @@ pub(crate) fn load(path: &str) -> (Vec<Vertex>, Vec<u32>) {
             continue;
         }
 
-        let transform = glam::Mat4::from_cols_array_2d(&node.transform().matrix());
+        let transform_mat = glam::Mat4::from_cols_array_2d(&node.transform().matrix());
+        let normal_mat = glam::Mat3::from_mat4(transform_mat);
+
         let Some(mesh) = node.mesh() else { continue };
 
         for primitive in mesh.primitives() {
@@ -20,10 +22,15 @@ pub(crate) fn load(path: &str) -> (Vec<Vertex>, Vec<u32>) {
             let base = vertices.len() as u32;
 
             let positions = reader.read_positions().expect("Failed to read positions");
-            for p in positions {
-                let world = transform * glam::Vec4::new(p[0], p[1], p[2], 1.0);
+            let normals = reader.read_normals().expect("Failed to read normals");
+
+            for (p, n) in positions.zip(normals) {
+                let p_world = transform_mat * glam::Vec4::new(p[0], p[1], p[2], 1.0);
+                let n_world = normal_mat * glam::Vec3::new(n[0], n[1], n[2]);
+
                 vertices.push(Vertex {
-                    position: [world[0], world[1], world[2]],
+                    position: [p_world[0], p_world[1], p_world[2]],
+                    normal: [n_world[0], n_world[1], n_world[2]],
                 });
             }
 
