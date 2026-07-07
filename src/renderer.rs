@@ -1,9 +1,9 @@
 use crate::camera::{Camera, CameraUniform};
-use crate::editor;
 use crate::gpu::Gpu;
 use crate::gui::Gui;
-use crate::vertex::{INDICES, VERTICES, Vertex};
+use crate::vertex::Vertex;
 use crate::viewport::Viewport;
+use crate::{editor, model};
 use wgpu::util::DeviceExt;
 use wgpu::{Color, CurrentSurfaceTexture, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 use winit::window::Window;
@@ -28,19 +28,21 @@ impl Renderer {
             source: ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
         });
 
+        let (vertices, indices) = model::load("assets/dragon.glb");
+
         let vertex_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("vertex-buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
+            contents: bytemuck::cast_slice(&vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
         let index_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("index-buffer"),
-            contents: bytemuck::cast_slice(INDICES),
+            contents: bytemuck::cast_slice(&indices),
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let num_indices = INDICES.len() as u32;
+        let num_indices = indices.len() as u32;
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_projection_matrix(camera);
@@ -174,7 +176,7 @@ impl Renderer {
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
 
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
