@@ -25,12 +25,12 @@ pub(crate) fn load(path: &str) -> (Vec<Vertex>, Vec<u32>) {
             let normals = reader.read_normals().expect("Failed to read normals");
 
             for (p, n) in positions.zip(normals) {
-                let p_world = transform_mat * glam::Vec4::new(p[0], p[1], p[2], 1.0);
-                let n_world = normal_mat * glam::Vec3::new(n[0], n[1], n[2]);
+                let p_world = (transform_mat * glam::Vec3::from_array(p).extend(1.0)).truncate();
+                let n_world = normal_mat * glam::Vec3::from_array(n);
 
                 vertices.push(Vertex {
-                    position: [p_world[0], p_world[1], p_world[2]],
-                    normal: [n_world[0], n_world[1], n_world[2]],
+                    position: p_world.to_array(),
+                    normal: n_world.to_array(),
                 });
             }
 

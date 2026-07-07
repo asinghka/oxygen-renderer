@@ -1,6 +1,6 @@
 use pollster::FutureExt;
 use std::sync::Arc;
-use wgpu::{Backends, Features, PowerPreference, TextureUsages};
+use wgpu::{Backends, PowerPreference, TextureUsages};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -28,8 +28,8 @@ impl Gpu {
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: PowerPreference::HighPerformance,
-                force_fallback_adapter: false,
                 compatible_surface: Some(&surface),
+                ..Default::default()
             })
             .block_on()
             .expect("Failed to create an adapter");
@@ -37,11 +37,7 @@ impl Gpu {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("device"),
-                required_features: Features::empty(),
-                required_limits: Default::default(),
-                experimental_features: Default::default(),
-                memory_hints: Default::default(),
-                trace: Default::default(),
+                ..Default::default()
             })
             .block_on()
             .expect("Failed to create a device");

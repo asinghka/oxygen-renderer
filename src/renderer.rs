@@ -49,7 +49,7 @@ impl Renderer {
 
         let camera_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("camera-buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniform]),
+            contents: bytemuck::bytes_of(&camera_uniform),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -215,7 +215,6 @@ impl Renderer {
 
     fn update_camera_uniform_buffer(&mut self, camera: &Camera, gpu: &Gpu) {
         self.camera_uniform.update_view_projection_matrix(camera);
-        gpu.queue
-            .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]));
+        gpu.queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(&self.camera_uniform));
     }
 }
