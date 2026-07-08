@@ -44,14 +44,14 @@ impl Renderer {
             source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
-        let (primitives, num_vertices, num_indices) = mesh::load("assets/dragon.glb");
+        let (primitives, num_vertices, num_indices) = mesh::load("assets/car.glb");
         stats.set_model(num_vertices, num_indices);
 
         let primitive_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("primitive-bind-group-layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,

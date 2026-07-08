@@ -1,3 +1,11 @@
+struct RenderSettings {
+    ambient: f32,
+    diffuse: u32,
+    specular: u32,
+    specular_strength: f32,
+    specular_exponent: f32,
+}
+
 struct Camera {
     eye: vec3<f32>,
     view_projection: mat4x4<f32>,
@@ -6,10 +14,14 @@ struct Camera {
 struct Primitive {
     model: mat4x4<f32>,
     normal_model: mat4x4<f32>,
+    color: vec4<f32>,
 }
 
 @group(0) @binding(0)
 var<uniform> camera: Camera;
+
+@group(1) @binding(0)
+var<uniform> settings: RenderSettings;
 
 @group(2) @binding(0)
 var<uniform> primitive: Primitive;
@@ -41,18 +53,6 @@ fn vertex_shader(in: VertexInput) -> VertexOutput {
     return out;
 }
 
-struct RenderSettings {
-    ambient: f32,
-    diffuse: u32,
-    specular: u32,
-    specular_strength: f32,
-    color: vec3<f32>,
-    specular_exponent: f32,
-}
-
-@group(1) @binding(0)
-var<uniform> settings: RenderSettings;
-
 @fragment
 fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
     let n = normalize(in.normal);
@@ -60,7 +60,7 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
     let light_dir = normalize(vec3<f32>(0.4, 0.8, 0.6));
 
     let ambient = settings.ambient;
-    let albedo = settings.color;
+    let albedo = primitive.color.xyz;
 
     let n_dot_l = dot(n, light_dir);
 

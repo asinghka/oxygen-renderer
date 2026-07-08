@@ -54,7 +54,14 @@ fn visit(
             *num_vertices += vertices.len() as u32;
             *num_indices += indices.len() as u32;
 
-            primitives.push(Primitive { vertices, indices, model })
+            let color = primitive.material().pbr_metallic_roughness().base_color_factor();
+
+            primitives.push(Primitive {
+                vertices,
+                indices,
+                model,
+                color,
+            })
         }
     }
 

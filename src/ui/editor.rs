@@ -55,11 +55,6 @@ pub(crate) fn build(ui: &mut egui::Ui, texture_id: egui::TextureId, settings: &m
 
                 ui.label("Background Color");
                 ui.color_edit_button_rgb(&mut settings.background);
-
-                ui.add_space(12.0);
-
-                ui.label("Model Color");
-                ui.color_edit_button_rgb(&mut settings.color);
             });
         });
 
