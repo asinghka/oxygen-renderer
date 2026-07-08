@@ -35,6 +35,11 @@ pub(crate) fn build(ui: &mut egui::Ui, texture_id: egui::TextureId, settings: &m
 
                 ui.label("Diffuse Lighting");
                 ui.checkbox(&mut settings.diffuse, "");
+
+                ui.add_space(12.0);
+
+                ui.label("Specular Highlights");
+                ui.checkbox(&mut settings.specular, "");
             });
 
             ui.add_space(12.0);

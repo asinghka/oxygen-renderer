@@ -1,14 +1,10 @@
 mod controller;
+mod uniform;
 
 pub(crate) use controller::*;
 
+use crate::camera::uniform::CameraUniform;
 use glam::camera::rh::{proj::directx, view};
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub(crate) struct CameraUniform {
-    view_projection_matrix: [[f32; 4]; 4],
-}
 
 pub(crate) struct CameraDescriptor {
     pub(crate) eye: glam::Vec3,
@@ -48,11 +44,13 @@ impl Camera {
 
     pub(crate) fn uniform(&self) -> CameraUniform {
         CameraUniform {
+            eye: self.eye.to_array(),
+            pad: 0,
             view_projection_matrix: self.build_view_projection_matrix().to_cols_array_2d(),
         }
     }
 
-    pub(crate) fn build_view_projection_matrix(&self) -> glam::Mat4 {
+    fn build_view_projection_matrix(&self) -> glam::Mat4 {
         let target = self.eye + self.forward();
 
         let view = view::look_at_mat4(self.eye, target, self.up);

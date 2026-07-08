@@ -9,14 +9,16 @@ const _: () = assert!(offset_of!(RenderSettingsUniform, color) == 16);
 pub(crate) struct RenderSettingsUniform {
     ambient_amount: f32,
     diffuse: u32,
-    _pad: [u32; 2],
+    specular: u32,
+    _pad: u32,
     color: [f32; 3],
-    _pad_2: [u32; 1],
+    _pad_2: u32,
 }
 
 pub(crate) struct RenderSettings {
     pub(crate) ambient: f32,
     pub(crate) diffuse: bool,
+    pub(crate) specular: bool,
     pub(crate) color: [f32; 3],
     pub(crate) background: [f32; 3],
     pub(crate) wireframe: bool,
@@ -27,6 +29,7 @@ impl Default for RenderSettings {
         Self {
             ambient: 0.1,
             diffuse: true,
+            specular: true,
             color: [0.8; 3],
             background: [0.08; 3],
             wireframe: false,
@@ -39,9 +42,10 @@ impl RenderSettings {
         RenderSettingsUniform {
             ambient_amount: self.ambient,
             diffuse: self.diffuse as u32,
-            _pad: [0, 0],
+            specular: self.specular as u32,
+            _pad: 0,
             color: self.color,
-            _pad_2: [0],
+            _pad_2: 0,
         }
     }
 }
