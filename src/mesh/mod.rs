@@ -1,6 +1,8 @@
 mod primitive;
 mod vertex;
 
+use gltf::Node;
+use gltf::buffer::Data;
 pub(crate) use primitive::*;
 pub(crate) use vertex::*;
 
@@ -11,11 +13,26 @@ pub(crate) fn load(path: &str) -> (Vec<Primitive>, u32, u32) {
     let mut num_vertices = 0;
     let mut num_indices = 0;
 
-    for node in document.nodes() {
-        let Some(mesh) = node.mesh() else { continue };
+    let roots = document.default_scene().expect("No scene found").nodes();
 
-        let model = node.transform().matrix();
+    for root in roots {
+        visit(root, &buffers, glam::Mat4::IDENTITY, &mut primitives, &mut num_vertices, &mut num_indices);
+    }
 
+    (primitives, num_vertices, num_indices)
+}
+
+fn visit(
+    node: Node,
+    buffers: &Vec<Data>,
+    parent_world_matrix: glam::Mat4,
+    primitives: &mut Vec<Primitive>,
+    num_vertices: &mut u32,
+    num_indices: &mut u32,
+) {
+    let model = parent_world_matrix * glam::Mat4::from_cols_array_2d(&node.transform().matrix());
+
+    if let Some(mesh) = node.mesh() {
         for primitive in mesh.primitives() {
             let mut vertices: Vec<Vertex> = Vec::new();
             let mut indices: Vec<u32> = Vec::new();
@@ -34,16 +51,14 @@ pub(crate) fn load(path: &str) -> (Vec<Primitive>, u32, u32) {
                 indices.push(i);
             }
 
-            num_vertices += vertices.len() as u32;
-            num_indices += indices.len() as u32;
+            *num_vertices += vertices.len() as u32;
+            *num_indices += indices.len() as u32;
 
-            primitives.push(Primitive {
-                vertices,
-                indices,
-                model: glam::Mat4::from_cols_array_2d(&model),
-            })
+            primitives.push(Primitive { vertices, indices, model })
         }
     }
 
-    (primitives, num_vertices, num_indices)
+    for child in node.children() {
+        visit(child, buffers, model, primitives, num_vertices, num_indices);
+    }
 }
