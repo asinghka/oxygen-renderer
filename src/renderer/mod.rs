@@ -8,24 +8,30 @@ pub(crate) use viewport::*;
 
 use crate::app::FrameStats;
 use crate::camera::Camera;
-use crate::mesh::{Vertex, model};
+use crate::mesh;
+use crate::mesh::Vertex;
 use crate::ui::{Gui, editor};
 use wgpu::util::DeviceExt;
-use wgpu::{Color, CurrentSurfaceTexture, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
+use wgpu::{BindGroupDescriptor, Color, CurrentSurfaceTexture, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 use winit::window::Window;
+
+struct PrimitiveBuffer {
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32,
+}
 
 pub(crate) struct Renderer {
     render_pipeline: wgpu::RenderPipeline,
     wireframe_pipeline: wgpu::RenderPipeline,
 
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
+    primitive_buffers: Vec<PrimitiveBuffer>,
+    primitive_bind_groups: Vec<wgpu::BindGroup>,
 
-    render_settings_buffer: wgpu::Buffer,
+    render_settings_uniform_buffer: wgpu::Buffer,
     render_settings_bind_group: wgpu::BindGroup,
 
-    camera_buffer: wgpu::Buffer,
+    camera_uniform_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 
     viewport: Viewport,
@@ -38,25 +44,65 @@ impl Renderer {
             source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
-        let (vertices, indices) = model::load("assets/dragon.glb");
+        let (primitives, num_vertices, num_indices) = mesh::load("assets/dragon.glb");
+        stats.set_model(num_vertices, num_indices);
 
-        stats.set_model(vertices.len() as u32, indices.len() as u32);
-
-        let vertex_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("vertex-buffer"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::VERTEX,
+        let primitive_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("primitive-bind-group-layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
         });
 
-        let index_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("index-buffer"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let mut primitive_buffers = Vec::new();
+        let mut primitive_bind_groups = Vec::new();
+        for primitive in primitives {
+            let vertex_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("vertex-buffer"),
+                contents: bytemuck::cast_slice(&primitive.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
 
-        let num_indices = indices.len() as u32;
+            let index_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("index-buffer"),
+                contents: bytemuck::cast_slice(&primitive.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
 
-        let render_settings_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            let num_indices = primitive.indices.len() as u32;
+
+            primitive_buffers.push(PrimitiveBuffer {
+                vertex_buffer,
+                index_buffer,
+                num_indices,
+            });
+
+            let primitive_uniform_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("primitive-buffer"),
+                contents: bytemuck::bytes_of(&primitive.uniform()),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
+            let primitive_bind_group = gpu.device.create_bind_group(&BindGroupDescriptor {
+                label: Some("primitive-bind-group"),
+                layout: &primitive_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: primitive_uniform_buffer.as_entire_binding(),
+                }],
+            });
+
+            primitive_bind_groups.push(primitive_bind_group);
+        }
+
+        let render_settings_uniform_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("settings-buffer"),
             contents: bytemuck::bytes_of(&settings.uniform()),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -81,11 +127,11 @@ impl Renderer {
             layout: &render_settings_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: render_settings_buffer.as_entire_binding(),
+                resource: render_settings_uniform_buffer.as_entire_binding(),
             }],
         });
 
-        let camera_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let camera_uniform_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("camera-buffer"),
             contents: bytemuck::bytes_of(&camera.uniform()),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -110,13 +156,17 @@ impl Renderer {
             layout: &camera_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: camera_buffer.as_entire_binding(),
+                resource: camera_uniform_buffer.as_entire_binding(),
             }],
         });
 
         let pipeline_layout = gpu.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline-layout"),
-            bind_group_layouts: &[Some(&camera_bind_group_layout), Some(&render_settings_bind_group_layout)],
+            bind_group_layouts: &[
+                Some(&camera_bind_group_layout),
+                Some(&render_settings_bind_group_layout),
+                Some(&primitive_bind_group_layout),
+            ],
             immediate_size: 0,
         });
 
@@ -205,12 +255,11 @@ impl Renderer {
         Self {
             render_pipeline,
             wireframe_pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
-            render_settings_buffer,
+            primitive_buffers,
+            primitive_bind_groups,
+            render_settings_uniform_buffer,
             render_settings_bind_group,
-            camera_buffer,
+            camera_uniform_buffer,
             camera_bind_group,
             viewport,
         }
@@ -285,9 +334,12 @@ impl Renderer {
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.render_settings_bind_group, &[]);
 
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            for (primitive_buffer, primitive_bind_group) in self.primitive_buffers.iter().zip(self.primitive_bind_groups.iter()) {
+                render_pass.set_bind_group(2, primitive_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
+            }
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));
@@ -315,10 +367,11 @@ impl Renderer {
 
     fn update_settings_uniform_buffer(&mut self, settings: &RenderSettings, gpu: &Gpu) {
         gpu.queue
-            .write_buffer(&self.render_settings_buffer, 0, bytemuck::bytes_of(&settings.uniform()));
+            .write_buffer(&self.render_settings_uniform_buffer, 0, bytemuck::bytes_of(&settings.uniform()));
     }
 
     fn update_camera_uniform_buffer(&mut self, camera: &Camera, gpu: &Gpu) {
-        gpu.queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(&camera.uniform()));
+        gpu.queue
+            .write_buffer(&self.camera_uniform_buffer, 0, bytemuck::bytes_of(&camera.uniform()));
     }
 }

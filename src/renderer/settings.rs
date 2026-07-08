@@ -1,7 +1,7 @@
 use std::mem::offset_of;
 
 // Ensure uniform values are 16-byte-aligned (std140)
-const _: () = assert!(size_of::<RenderSettingsUniform>() == 32);
+const _: () = assert!(size_of::<RenderSettingsUniform>() % 16 == 0);
 const _: () = assert!(offset_of!(RenderSettingsUniform, color) == 16);
 
 #[repr(C)]

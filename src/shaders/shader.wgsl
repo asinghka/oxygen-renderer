@@ -3,8 +3,16 @@ struct Camera {
     view_projection: mat4x4<f32>,
 }
 
+struct Primitive {
+    model: mat4x4<f32>,
+    normal_model: mat4x4<f32>,
+}
+
 @group(0) @binding(0)
 var<uniform> camera: Camera;
+
+@group(2) @binding(0)
+var<uniform> primitive: Primitive;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -20,9 +28,15 @@ struct VertexOutput {
 @vertex
 fn vertex_shader(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.world_pos = in.position;
-    out.normal = in.normal;
-    out.clip_pos = camera.view_projection * vec4<f32>(in.position, 1.0);
+
+    let model = primitive.model;
+    let normal_model = primitive.normal_model;
+
+    let world_pos = model * vec4<f32>(in.position, 1.0);
+
+    out.world_pos = world_pos.xyz;
+    out.normal = (normal_model * vec4<f32>(in.normal, 0.0)).xyz;
+    out.clip_pos = camera.view_projection * world_pos;
 
     return out;
 }
