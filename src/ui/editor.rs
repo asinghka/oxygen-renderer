@@ -40,6 +40,12 @@ pub(crate) fn build(ui: &mut egui::Ui, texture_id: egui::TextureId, settings: &m
 
                 ui.label("Specular Highlights");
                 ui.checkbox(&mut settings.specular, "");
+
+                ui.label("Specular Strength");
+                Slider::new(&mut settings.specular_strength, 0.0..=1.0).ui(ui);
+
+                ui.label("Shininess");
+                Slider::new(&mut settings.shininess, 0.0..=1.0).ui(ui);
             });
 
             ui.add_space(12.0);

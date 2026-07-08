@@ -31,7 +31,9 @@ struct RenderSettings {
     ambient: f32,
     diffuse: u32,
     specular: u32,
+    specular_strength: f32,
     color: vec3<f32>,
+    specular_exponent: f32,
 }
 
 @group(1) @binding(0)
@@ -56,7 +58,7 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
 
     var specular = 0.0;
     if settings.specular != 0u {
-        specular = pow(max(dot(n, half_dir), 0.0), 32.0);
+        specular = settings.specular_strength * pow(max(dot(n, half_dir), 0.0), settings.specular_exponent);
     }
 
     let color = albedo * (ambient + diffuse) + specular;
