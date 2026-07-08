@@ -151,7 +151,7 @@ impl Renderer {
                 entry_point: None,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: TextureFormat::Rgba8Unorm,
+                    format: TextureFormat::Rgba8UnormSrgb,
                     blend: None,
                     write_mask: Default::default(),
                 })],
@@ -191,7 +191,7 @@ impl Renderer {
                 entry_point: None,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: TextureFormat::Rgba8Unorm,
+                    format: TextureFormat::Rgba8UnormSrgb,
                     blend: None,
                     write_mask: Default::default(),
                 })],
