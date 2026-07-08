@@ -37,6 +37,7 @@ impl Gpu {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("device"),
+                required_features: wgpu::Features::POLYGON_MODE_LINE,
                 ..Default::default()
             })
             .block_on()

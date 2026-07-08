@@ -7,10 +7,6 @@ pub(crate) fn load(path: &str) -> (Vec<Vertex>, Vec<u32>) {
     let mut indices: Vec<u32> = Vec::new();
 
     for node in document.nodes() {
-        if node.name() != Some("Dragon") {
-            continue;
-        }
-
         let transform_mat = glam::Mat4::from_cols_array_2d(&node.transform().matrix());
         let normal_mat = glam::Mat3::from_mat4(transform_mat);
 

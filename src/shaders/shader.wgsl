@@ -24,15 +24,28 @@ fn vertex_shader(in: VertexInput) -> VertexOutput {
     return out;
 }
 
+struct RenderSettings {
+    ambient: f32,
+    diffuse: u32,
+    color: vec3<f32>,
+}
+
+@group(1) @binding(0)
+var<uniform> settings: RenderSettings;
+
 @fragment
 fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
     let n = normalize(in.normal);
 
     let light_dir = normalize(vec3<f32>(0.4, 0.8, 0.6));
 
-    let diffuse = max(dot(n, light_dir), 0.0);
-    let ambient = 0.1;
-    let albedo = vec3<f32>(1.0, 0.5, 0.2);
+    var diffuse = 0.0;
+    if settings.diffuse != 0u {
+        diffuse = max(dot(n, light_dir), 0.0);
+    }
+
+    let ambient = settings.ambient;
+    let albedo = settings.color;
 
     let color = albedo * (ambient + diffuse);
 

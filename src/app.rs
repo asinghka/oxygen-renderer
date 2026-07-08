@@ -3,7 +3,9 @@ use crate::gpu::Gpu;
 use crate::gui::Gui;
 use crate::input::InputState;
 use crate::renderer::Renderer;
+use crate::settings::RenderSettings;
 use crate::state::AppState;
+use crate::stats::FrameStats;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
@@ -16,9 +18,15 @@ const APP_NAME: &str = "Oxygen";
 
 pub(crate) struct App {
     app_state: Option<AppState>,
+
     camera_controller: CameraController,
     input_state: InputState,
+
     viewport_rect: egui::Rect,
+
+    render_settings: RenderSettings,
+
+    stats: FrameStats,
     last_frame_time: Option<Instant>,
 }
 
@@ -29,6 +37,8 @@ impl Default for App {
             camera_controller: CameraController::default(),
             input_state: InputState::default(),
             viewport_rect: egui::Rect::NOTHING,
+            render_settings: RenderSettings::default(),
+            stats: FrameStats::default(),
             last_frame_time: None,
         }
     }
@@ -60,7 +70,7 @@ impl ApplicationHandler for App {
             zfar: 100.0,
         });
 
-        let renderer = Renderer::new(&camera, &gpu, &mut gui);
+        let renderer = Renderer::new(&camera, &gpu, &mut gui, &self.render_settings, &mut self.stats);
 
         self.app_state = Some(AppState::new(window, camera, gpu, renderer, gui));
     }
@@ -95,14 +105,22 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();
-                let dt = self.last_frame_time.map_or(0.0, |last| (now - last).as_secs_f32()).min(0.1);
+                let dt = self.last_frame_time.map_or(0.0, |last| (now - last).as_secs_f32());
                 self.last_frame_time = Some(now);
 
-                let displacement = self.camera_controller.compute(&mut self.input_state, dt);
+                // Min to avoid garbage values while focus is lost
+                self.stats.set_time(dt.min(1.0));
+
+                let displacement = self.camera_controller.compute(&mut self.input_state, dt.min(0.1));
                 app_state.camera.displace(displacement);
-                self.viewport_rect = app_state
-                    .renderer
-                    .render(&app_state.window, &mut app_state.camera, &app_state.gpu, &mut app_state.gui);
+                self.viewport_rect = app_state.renderer.render(
+                    &app_state.window,
+                    &mut app_state.camera,
+                    &app_state.gpu,
+                    &mut app_state.gui,
+                    &mut self.render_settings,
+                    &self.stats,
+                );
             }
             WindowEvent::Resized(size) => {
                 // This only needs to resize the surface as the viewport texture size is handled
