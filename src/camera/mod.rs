@@ -1,24 +1,13 @@
-use crate::input::InputState;
+mod controller;
+
+pub(crate) use controller::*;
+
 use glam::camera::rh::{proj::directx, view};
-use winit::event::MouseButton;
-use winit::keyboard::KeyCode;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct CameraUniform {
     view_projection_matrix: [[f32; 4]; 4],
-}
-
-impl CameraUniform {
-    pub(crate) fn new() -> Self {
-        Self {
-            view_projection_matrix: glam::Mat4::IDENTITY.to_cols_array_2d(),
-        }
-    }
-
-    pub(crate) fn update_view_projection_matrix(&mut self, camera: &Camera) {
-        self.view_projection_matrix = camera.build_view_projection_matrix().to_cols_array_2d();
-    }
 }
 
 pub(crate) struct CameraDescriptor {
@@ -57,6 +46,12 @@ impl Camera {
         }
     }
 
+    pub(crate) fn uniform(&self) -> CameraUniform {
+        CameraUniform {
+            view_projection_matrix: self.build_view_projection_matrix().to_cols_array_2d(),
+        }
+    }
+
     pub(crate) fn build_view_projection_matrix(&self) -> glam::Mat4 {
         let target = self.eye + self.forward();
 
@@ -85,65 +80,5 @@ impl Camera {
 
     pub(crate) fn update_aspect_ratio(&mut self, aspect: f32) {
         self.aspect = aspect;
-    }
-}
-
-pub(crate) struct CameraDisplacement {
-    translation: glam::Vec3,
-    fov: f32,
-    yaw: f32,
-    pitch: f32,
-}
-
-pub(crate) struct CameraController {
-    speed: f32,
-    sensitivity: f32,
-}
-
-impl Default for CameraController {
-    fn default() -> Self {
-        Self {
-            speed: 6.0,
-            sensitivity: 0.004,
-        }
-    }
-}
-
-impl CameraController {
-    pub(crate) fn compute(&self, input_state: &mut InputState, dt: f32) -> CameraDisplacement {
-        let mut translation = glam::Vec3::ZERO;
-
-        if input_state.is_key_pressed(KeyCode::KeyD) {
-            translation += glam::Vec3::X;
-        }
-        if input_state.is_key_pressed(KeyCode::KeyA) {
-            translation -= glam::Vec3::X;
-        }
-        if input_state.is_key_pressed(KeyCode::KeyQ) {
-            translation += glam::Vec3::Y;
-        }
-        if input_state.is_key_pressed(KeyCode::KeyE) {
-            translation -= glam::Vec3::Y;
-        }
-        if input_state.is_key_pressed(KeyCode::KeyW) {
-            translation += glam::Vec3::Z;
-        }
-        if input_state.is_key_pressed(KeyCode::KeyS) {
-            translation -= glam::Vec3::Z;
-        }
-
-        let mut mouse_pos_delta = input_state.take_mouse_pos_delta();
-        if !input_state.is_mouse_button_pressed(MouseButton::Right) {
-            mouse_pos_delta = glam::Vec2::ZERO;
-        }
-
-        let mouse_scroll_delta = input_state.take_mouse_scroll_delta();
-
-        CameraDisplacement {
-            translation: translation.normalize_or_zero() * self.speed * dt,
-            fov: mouse_scroll_delta,
-            yaw: -mouse_pos_delta.x * self.sensitivity,
-            pitch: -mouse_pos_delta.y * self.sensitivity,
-        }
     }
 }

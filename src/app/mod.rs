@@ -1,11 +1,14 @@
+mod input;
+mod state;
+mod stats;
+
+pub(crate) use input::*;
+pub(crate) use state::*;
+pub(crate) use stats::*;
+
 use crate::camera::{Camera, CameraController, CameraDescriptor};
-use crate::gpu::Gpu;
-use crate::gui::Gui;
-use crate::input::InputState;
-use crate::renderer::Renderer;
-use crate::settings::RenderSettings;
-use crate::state::AppState;
-use crate::stats::FrameStats;
+use crate::renderer::{Gpu, RenderSettings, Renderer};
+use crate::ui::Gui;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
@@ -84,23 +87,22 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            WindowEvent::MouseInput { state, button, .. } => {
-                match button {
-                    MouseButton::Right => {
-                        if state == ElementState::Pressed {
-                            let over_viewport = app_state.gui.pointer_pos().is_some_and(|p| self.viewport_rect.contains(p));
-                            if over_viewport {
-                                app_state.window.set_cursor_visible(false);
-                                let _ = app_state.window.set_cursor_grab(CursorGrabMode::Locked);
-                                self.input_state.mouse_press(button);
-                            }
-                        } else {
-                            app_state.window.set_cursor_visible(true);
-                            let _ = app_state.window.set_cursor_grab(CursorGrabMode::None);
-                            self.input_state.mouse_release(button);
-                        }
+            WindowEvent::MouseInput {
+                state,
+                button: button @ MouseButton::Right,
+                ..
+            } => {
+                if state == ElementState::Pressed {
+                    let over_viewport = app_state.gui.pointer_pos().is_some_and(|p| self.viewport_rect.contains(p));
+                    if over_viewport {
+                        app_state.window.set_cursor_visible(false);
+                        let _ = app_state.window.set_cursor_grab(CursorGrabMode::Locked);
+                        self.input_state.mouse_press(button);
                     }
-                    _ => {}
+                } else {
+                    app_state.window.set_cursor_visible(true);
+                    let _ = app_state.window.set_cursor_grab(CursorGrabMode::None);
+                    self.input_state.mouse_release(button);
                 }
             }
             WindowEvent::RedrawRequested => {

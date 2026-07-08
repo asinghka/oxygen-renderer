@@ -1,17 +1,8 @@
 mod app;
 mod camera;
-mod editor;
-mod gpu;
-mod gui;
-mod input;
-mod model;
+mod mesh;
 mod renderer;
-mod settings;
-mod state;
-mod stats;
-mod style;
-mod vertex;
-mod viewport;
+mod ui;
 
 use crate::app::App;
 use winit::event_loop::{ControlFlow, EventLoop};

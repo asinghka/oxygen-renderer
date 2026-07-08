@@ -1,5 +1,5 @@
-use crate::settings::RenderSettings;
-use crate::stats::FrameStats;
+use crate::app::FrameStats;
+use crate::renderer::RenderSettings;
 use egui::load::SizedTexture;
 use egui::{Align, CentralPanel, CollapsingHeader, Frame, Layout, Panel, Slider, Widget};
 

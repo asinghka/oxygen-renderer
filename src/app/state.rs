@@ -1,7 +1,6 @@
 use crate::camera::Camera;
-use crate::gpu::Gpu;
-use crate::gui::Gui;
-use crate::renderer::Renderer;
+use crate::renderer::{Gpu, Renderer};
+use crate::ui::Gui;
 use std::sync::Arc;
 use winit::window::Window;
 

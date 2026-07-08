@@ -1,4 +1,4 @@
-use crate::vertex::Vertex;
+use crate::mesh::Vertex;
 
 pub(crate) fn load(path: &str) -> (Vec<Vertex>, Vec<u32>) {
     let (document, buffers, _) = gltf::import(path).expect("Failed to load glTF file");
@@ -7,6 +7,10 @@ pub(crate) fn load(path: &str) -> (Vec<Vertex>, Vec<u32>) {
     let mut indices: Vec<u32> = Vec::new();
 
     for node in document.nodes() {
+        if Some("Dragon") != node.name() {
+            continue;
+        }
+
         let transform_mat = glam::Mat4::from_cols_array_2d(&node.transform().matrix());
         let normal_mat = glam::Mat3::from_mat4(transform_mat);
 

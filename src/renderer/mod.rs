@@ -1,11 +1,15 @@
-use crate::camera::{Camera, CameraUniform};
-use crate::gpu::Gpu;
-use crate::gui::Gui;
-use crate::settings::RenderSettings;
-use crate::stats::FrameStats;
-use crate::vertex::Vertex;
-use crate::viewport::Viewport;
-use crate::{editor, model};
+mod gpu;
+mod settings;
+mod viewport;
+
+pub(crate) use gpu::*;
+pub(crate) use settings::*;
+pub(crate) use viewport::*;
+
+use crate::app::FrameStats;
+use crate::camera::Camera;
+use crate::mesh::{Vertex, model};
+use crate::ui::{Gui, editor};
 use wgpu::util::DeviceExt;
 use wgpu::{Color, CurrentSurfaceTexture, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 use winit::window::Window;
@@ -21,7 +25,6 @@ pub(crate) struct Renderer {
     render_settings_buffer: wgpu::Buffer,
     render_settings_bind_group: wgpu::BindGroup,
 
-    camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 
@@ -32,7 +35,7 @@ impl Renderer {
     pub(crate) fn new(camera: &Camera, gpu: &Gpu, gui: &mut Gui, settings: &RenderSettings, stats: &mut FrameStats) -> Self {
         let shader_module = gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
-            source: ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
+            source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
         let (vertices, indices) = model::load("assets/dragon.glb");
@@ -82,12 +85,9 @@ impl Renderer {
             }],
         });
 
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_projection_matrix(camera);
-
         let camera_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("camera-buffer"),
-            contents: bytemuck::bytes_of(&camera_uniform),
+            contents: bytemuck::bytes_of(&camera.uniform()),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -210,7 +210,6 @@ impl Renderer {
             num_indices,
             render_settings_buffer,
             render_settings_bind_group,
-            camera_uniform,
             camera_buffer,
             camera_bind_group,
             viewport,
@@ -320,7 +319,6 @@ impl Renderer {
     }
 
     fn update_camera_uniform_buffer(&mut self, camera: &Camera, gpu: &Gpu) {
-        self.camera_uniform.update_view_projection_matrix(camera);
-        gpu.queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(&self.camera_uniform));
+        gpu.queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(&camera.uniform()));
     }
 }

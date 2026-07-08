@@ -35,7 +35,7 @@ fn set_fonts(ctx: &egui::Context) {
     let mut fonts = FontDefinitions::default();
     fonts.font_data.insert(
         "Inter-Medium".into(),
-        Arc::new(FontData::from_static(include_bytes!("../fonts/Inter-Medium.otf"))),
+        Arc::new(FontData::from_static(include_bytes!("../../fonts/Inter-Medium.otf"))),
     );
     fonts
         .families

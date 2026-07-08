@@ -1,4 +1,4 @@
-use crate::gui::Gui;
+use crate::ui::Gui;
 use wgpu::{Extent3d, TextureDimension, TextureFormat, TextureUsages};
 
 pub(crate) struct Viewport {
