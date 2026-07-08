@@ -48,16 +48,18 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
     let ambient = settings.ambient;
     let albedo = settings.color;
 
+    let n_dot_l = dot(n, light_dir);
+
     var diffuse = 0.0;
     if settings.diffuse != 0u {
-        diffuse = max(dot(n, light_dir), 0.0);
+        diffuse = max(n_dot_l, 0.0);
     }
 
     let view_dir = normalize(camera.eye - in.world_pos);
     let half_dir = normalize(light_dir + view_dir);
 
     var specular = 0.0;
-    if settings.specular != 0u {
+    if settings.specular != 0u && n_dot_l > 0.0 { // Make sure specular glint is only visible when facing the light
         specular = settings.specular_strength * pow(max(dot(n, half_dir), 0.0), settings.specular_exponent);
     }
 
