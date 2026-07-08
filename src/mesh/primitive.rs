@@ -1,7 +1,7 @@
 use crate::mesh::Vertex;
 use std::mem::offset_of;
 
-const _: () = assert!(size_of::<PrimitiveUniform>() % 16 == 0);
+const _: () = assert!(size_of::<PrimitiveUniform>() == 144);
 const _: () = assert!(offset_of!(PrimitiveUniform, normal_model) == 64);
 
 #[repr(C)]
