@@ -40,7 +40,7 @@ impl Renderer {
             source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
-        let (loaded_scene, primitives, num_vertices, num_indices) = mesh::load("assets/watch.glb");
+        let (loaded_scene, primitives, num_vertices, num_indices) = mesh::load("assets/dragon.glb");
         *scene = loaded_scene;
         stats.set_model(num_vertices, num_indices);
 
