@@ -128,6 +128,14 @@ impl ApplicationHandler for App {
 
                 let mut encoder = app_state.gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
+                app_state.renderer.render(
+                    &mut app_state.camera,
+                    &app_state.gpu,
+                    &mut encoder,
+                    &app_state.viewport,
+                    &mut self.render_settings,
+                );
+
                 let mut viewport_rect = egui::Rect::NOTHING;
                 app_state.gui.render(
                     &app_state.window,
@@ -152,14 +160,6 @@ impl ApplicationHandler for App {
 
                     app_state.camera.update_aspect_ratio(viewport_rect.size().x, viewport_rect.size().y);
                 }
-
-                app_state.renderer.render(
-                    &mut app_state.camera,
-                    &app_state.gpu,
-                    &mut encoder,
-                    &app_state.viewport,
-                    &mut self.render_settings,
-                );
 
                 app_state.gpu.queue.submit(std::iter::once(encoder.finish()));
                 frame.present();
