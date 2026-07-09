@@ -52,11 +52,7 @@ fn visit(
     num_vertices: &mut u32,
     num_indices: &mut u32,
 ) -> usize {
-    let mut scene_node = SceneNode {
-        name: node.name().map(|s| s.to_string()),
-        children: vec![],
-        primitives: vec![],
-    };
+    let mut scene_node = SceneNode::new(node.name().map(|s| s.to_string()));
 
     let model = parent_world_matrix * glam::Mat4::from_cols_array_2d(&node.transform().matrix());
 

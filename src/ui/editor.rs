@@ -57,7 +57,7 @@ pub(crate) fn build(
                 ui.take_available_space();
                 Frame::default().inner_margin(12).show(ui, |ui| {
                     for &root in &scene.root_indices {
-                        node_tree(ui, &scene.scene_nodes, root);
+                        node_tree(ui, &mut scene.scene_nodes, root);
                     }
                 });
             });
@@ -112,15 +112,30 @@ pub(crate) fn build(
         .inner
 }
 
-fn node_tree(ui: &mut egui::Ui, nodes: &[SceneNode], index: usize) {
-    let node = &nodes[index];
+fn node_tree(ui: &mut egui::Ui, nodes: &mut [SceneNode], index: usize) {
+    let node = &mut nodes[index];
+    let children = node.children.clone();
     let name = node.name.as_deref().unwrap_or("<unnamed>");
 
     if node.children.is_empty() {
-        ui.label(name);
+        ui.horizontal(|ui| {
+            ui.label(name);
+
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let button = if node.visible {
+                    re_ui::icons::VISIBLE.as_button().small()
+                } else {
+                    re_ui::icons::INVISIBLE.as_button().small()
+                };
+
+                if button.ui(ui).clicked() {
+                    node.visible = !node.visible;
+                }
+            });
+        });
     } else {
         CollapsingHeader::new(name).id_salt(index).default_open(false).show(ui, |ui| {
-            for &child in &node.children {
+            for child in children {
                 node_tree(ui, nodes, child);
             }
         });

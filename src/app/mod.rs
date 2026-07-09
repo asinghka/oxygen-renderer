@@ -134,6 +134,7 @@ impl ApplicationHandler for App {
 
                 app_state.renderer.render(
                     &mut app_state.camera,
+                    &self.scene,
                     &app_state.gpu,
                     &mut encoder,
                     &app_state.viewport,

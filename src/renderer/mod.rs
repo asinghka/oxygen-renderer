@@ -40,7 +40,7 @@ impl Renderer {
             source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
-        let (loaded_scene, primitives, num_vertices, num_indices) = mesh::load("assets/car.glb");
+        let (loaded_scene, primitives, num_vertices, num_indices) = mesh::load("assets/watch.glb");
         *scene = loaded_scene;
         stats.set_model(num_vertices, num_indices);
 
@@ -262,6 +262,7 @@ impl Renderer {
     pub(crate) fn render(
         &mut self,
         camera: &mut Camera,
+        scene: &Scene,
         gpu: &Gpu,
         encoder: &mut wgpu::CommandEncoder,
         viewport: &Viewport,
@@ -308,7 +309,13 @@ impl Renderer {
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.render_settings_bind_group, &[]);
 
-            for (primitive_buffer, primitive_bind_group) in self.primitive_buffers.iter().zip(self.primitive_bind_groups.iter()) {
+            let invisible = scene.get_invisible_nodes();
+
+            for (i, (primitive_buffer, primitive_bind_group)) in self.primitive_buffers.iter().zip(self.primitive_bind_groups.iter()).enumerate() {
+                if invisible.contains(&i) {
+                    continue;
+                }
+
                 render_pass.set_bind_group(2, primitive_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
