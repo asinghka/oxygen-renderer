@@ -309,7 +309,7 @@ impl Renderer {
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.render_settings_bind_group, &[]);
 
-            let invisible = scene.get_invisible_nodes();
+            let invisible = scene.get_invisible_primitives();
 
             for (i, (primitive_buffer, primitive_bind_group)) in self.primitive_buffers.iter().zip(self.primitive_bind_groups.iter()).enumerate() {
                 if invisible.contains(&i) {

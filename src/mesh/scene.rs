@@ -26,15 +26,19 @@ pub(crate) struct Scene {
 }
 
 impl Scene {
-    pub(crate) fn get_invisible_nodes(&self) -> HashSet<usize> {
+    pub(crate) fn get_invisible_primitives(&self) -> HashSet<usize> {
         let mut invisible = HashSet::new();
 
         for root_index in self.root_indices.iter() {
-            if !self.scene_nodes[*root_index].visible {
-                invisible.insert(*root_index);
+            let node = &self.scene_nodes[*root_index];
+
+            if !node.visible {
+                for primitive in &node.primitives {
+                    invisible.insert(*primitive);
+                }
             }
 
-            for child in &self.scene_nodes[*root_index].children {
+            for child in &node.children {
                 self.insert_invisible_children(*child, &mut invisible);
             }
         }
@@ -46,7 +50,9 @@ impl Scene {
         let node = &self.scene_nodes[index];
 
         if !node.visible {
-            invisible.insert(index);
+            for primitive in &node.primitives {
+                invisible.insert(*primitive);
+            }
         }
 
         if node.children.is_empty() {
