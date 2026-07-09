@@ -1,3 +1,5 @@
+use crate::mesh::Scene;
+
 const REFRESH_INTERVAL: f32 = 0.25;
 
 #[derive(Default)]
@@ -31,7 +33,9 @@ impl FrameStats {
         }
     }
 
-    pub(crate) fn set_model(&mut self, vertices: u32, indices: u32) {
+    pub(crate) fn update(&mut self, scene: &Scene) {
+        let (vertices, indices) = scene.get_visible_primitive_stats();
+
         self.vertices = vertices;
         self.indices = indices;
     }

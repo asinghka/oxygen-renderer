@@ -6,7 +6,6 @@ pub(crate) use gpu::*;
 pub(crate) use settings::*;
 pub(crate) use viewport::*;
 
-use crate::app::FrameStats;
 use crate::camera::Camera;
 use crate::mesh;
 use crate::mesh::{Scene, Vertex};
@@ -34,15 +33,14 @@ pub(crate) struct Renderer {
 }
 
 impl Renderer {
-    pub(crate) fn new(camera: &Camera, gpu: &Gpu, scene: &mut Scene, settings: &RenderSettings, stats: &mut FrameStats) -> Self {
+    pub(crate) fn new(camera: &Camera, gpu: &Gpu, scene: &mut Scene, settings: &RenderSettings) -> Self {
         let shader_module = gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
-        let (loaded_scene, primitives, num_vertices, num_indices) = mesh::load("assets/car.glb");
+        let loaded_scene = mesh::load("assets/car.glb");
         *scene = loaded_scene;
-        stats.set_model(num_vertices, num_indices);
 
         let primitive_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("primitive-bind-group-layout"),
@@ -60,7 +58,7 @@ impl Renderer {
 
         let mut primitive_buffers = Vec::new();
         let mut primitive_bind_groups = Vec::new();
-        for primitive in primitives {
+        for primitive in &scene.primitives {
             let vertex_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("vertex-buffer"),
                 contents: bytemuck::cast_slice(&primitive.vertices),

@@ -8,7 +8,7 @@ pub(crate) use primitive::*;
 pub(crate) use scene::*;
 pub(crate) use vertex::*;
 
-pub(crate) fn load(path: &str) -> (Scene, Vec<Primitive>, u32, u32) {
+pub(crate) fn load(path: &str) -> Scene {
     let (document, buffers, _) = gltf::import(path).expect("Failed to load glTF file");
 
     let mut scene_nodes = Vec::with_capacity(document.nodes().count());
@@ -16,9 +16,6 @@ pub(crate) fn load(path: &str) -> (Scene, Vec<Primitive>, u32, u32) {
 
     let mut primitives = Vec::new();
     let mut primitive_index = 0;
-
-    let mut num_vertices = 0;
-    let mut num_indices = 0;
 
     let roots = document.default_scene().expect("No scene found").nodes();
 
@@ -30,16 +27,16 @@ pub(crate) fn load(path: &str) -> (Scene, Vec<Primitive>, u32, u32) {
             &mut scene_nodes,
             &mut primitives,
             &mut primitive_index,
-            &mut num_vertices,
-            &mut num_indices,
         );
 
         root_indices.push(root_index);
     }
 
-    let scene = Scene { scene_nodes, root_indices };
-
-    (scene, primitives, num_vertices, num_indices)
+    Scene {
+        scene_nodes,
+        root_indices,
+        primitives,
+    }
 }
 
 fn visit(
@@ -49,8 +46,6 @@ fn visit(
     scene_nodes: &mut Vec<SceneNode>,
     primitives: &mut Vec<Primitive>,
     primitive_index: &mut usize,
-    num_vertices: &mut u32,
-    num_indices: &mut u32,
 ) -> usize {
     let mut scene_node = SceneNode::new(node.name().map(|s| s.to_string()));
 
@@ -78,9 +73,6 @@ fn visit(
                 indices.push(i);
             }
 
-            *num_vertices += vertices.len() as u32;
-            *num_indices += indices.len() as u32;
-
             let color = primitive.material().pbr_metallic_roughness().base_color_factor();
 
             primitives.push(Primitive {
@@ -93,7 +85,7 @@ fn visit(
     }
 
     for child in node.children() {
-        let child_index = visit(child, buffers, model, scene_nodes, primitives, primitive_index, num_vertices, num_indices);
+        let child_index = visit(child, buffers, model, scene_nodes, primitives, primitive_index);
         scene_node.children.push(child_index);
     }
 

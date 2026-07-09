@@ -78,7 +78,7 @@ impl ApplicationHandler for App {
             zfar: 100.0,
         });
 
-        let renderer = Renderer::new(&camera, &gpu, &mut self.scene, &self.render_settings, &mut self.stats);
+        let renderer = Renderer::new(&camera, &gpu, &mut self.scene, &self.render_settings);
         let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
 
         self.app_state = Some(AppState::new(window, camera, gpu, renderer, gui, viewport));
@@ -118,6 +118,7 @@ impl ApplicationHandler for App {
 
                 // Min to avoid garbage values while focus is lost
                 self.stats.set_time(dt.min(1.0));
+                self.stats.update(&self.scene);
 
                 let displacement = self.camera_controller.compute(&mut self.input_state, dt.min(0.1));
                 app_state.camera.displace(displacement);

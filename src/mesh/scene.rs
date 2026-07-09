@@ -1,3 +1,4 @@
+use crate::mesh::Primitive;
 use std::collections::HashSet;
 
 #[derive(Debug)]
@@ -31,6 +32,7 @@ impl SceneNode {
 #[derive(Default)]
 pub(crate) struct Scene {
     pub(crate) scene_nodes: Vec<SceneNode>,
+    pub(crate) primitives: Vec<Primitive>,
     pub(crate) root_indices: Vec<usize>,
 }
 
@@ -56,7 +58,7 @@ impl Scene {
     pub(crate) fn get_invisible_primitives(&self) -> HashSet<usize> {
         let mut invisible = HashSet::new();
 
-        for root_index in self.root_indices.iter() {
+        for root_index in &self.root_indices {
             let node = &self.scene_nodes[*root_index];
 
             if Some(false) == node.visible {
@@ -89,5 +91,24 @@ impl Scene {
         for child in &node.children {
             self.insert_invisible_children(*child, invisible);
         }
+    }
+
+    pub(crate) fn get_visible_primitive_stats(&self) -> (u32, u32) {
+        let mut num_vertices = 0;
+        let mut num_indices = 0;
+
+        for node in &self.scene_nodes {
+            if Some(true) != node.visible {
+                continue;
+            }
+
+            for primitive_index in &node.primitives {
+                let primitive = &self.primitives[*primitive_index];
+                num_vertices += primitive.vertices.len() as u32;
+                num_indices += primitive.indices.len() as u32;
+            }
+        }
+
+        (num_vertices, num_indices)
     }
 }
