@@ -2,7 +2,7 @@ use crate::app::FrameStats;
 use crate::mesh::{Scene, SceneNode};
 use crate::renderer::RenderSettings;
 use egui::load::SizedTexture;
-use egui::{Align, CentralPanel, CollapsingHeader, Frame, Layout, MenuBar, Panel, ScrollArea, Slider, Widget};
+use egui::{Align, Button, CentralPanel, CollapsingHeader, Frame, Layout, Margin, MenuBar, Panel, ScrollArea, Slider, Widget};
 use re_ui::UiExt;
 
 pub(crate) fn build(
@@ -53,9 +53,35 @@ pub(crate) fn build(
     Panel::left("left-panel")
         .frame(Frame::NONE.fill(ui.tokens().panel_bg_color))
         .show(ui, |ui| {
+            Panel::top("left-panel-header")
+                .exact_size(ui.tokens().title_bar_height())
+                .frame(Frame::default().inner_margin(Margin::symmetric(ui.tokens().view_padding(), 0)))
+                .show(ui, |ui| {
+                    ui.horizontal_centered(|ui| {
+                        ui.strong("Scene Tree");
+
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            let at_least_one_visible = scene.at_least_one_visible();
+                            let icon = if at_least_one_visible {
+                                &re_ui::icons::VISIBLE
+                            } else {
+                                &re_ui::icons::INVISIBLE
+                            };
+
+                            let image = icon.as_image().fit_to_exact_size(ui.tokens().small_icon_size);
+                            let response = Button::image(image).image_tint_follows_text_color(true).small().ui(ui);
+
+                            if response.clicked() {
+                                scene.set_all_visible(!at_least_one_visible)
+                            }
+                        })
+                    });
+                });
+
             ScrollArea::vertical().show(ui, |ui| {
                 ui.take_available_space();
                 Frame::default().inner_margin(12).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 6.0;
                     for &root in &scene.root_indices {
                         node_tree(ui, &mut scene.scene_nodes, root);
                     }
@@ -119,16 +145,22 @@ fn node_tree(ui: &mut egui::Ui, nodes: &mut [SceneNode], index: usize) {
 
     if node.children.is_empty() {
         ui.horizontal(|ui| {
+            ui.visuals_mut().widgets.hovered.expansion = 0.0;
+            ui.visuals_mut().widgets.active.expansion = 0.0;
+
             ui.label(name);
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let button = if node.visible {
-                    re_ui::icons::VISIBLE.as_button().small()
+                let icon = if node.visible {
+                    &re_ui::icons::VISIBLE
                 } else {
-                    re_ui::icons::INVISIBLE.as_button().small()
+                    &re_ui::icons::INVISIBLE
                 };
 
-                if button.ui(ui).clicked() {
+                let image = icon.as_image().fit_to_exact_size(ui.tokens().small_icon_size);
+                let response = Button::image(image).image_tint_follows_text_color(true).small().ui(ui);
+
+                if response.clicked() {
                     node.visible = !node.visible;
                 }
             });

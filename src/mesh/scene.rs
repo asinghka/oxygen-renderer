@@ -26,6 +26,22 @@ pub(crate) struct Scene {
 }
 
 impl Scene {
+    pub(crate) fn at_least_one_visible(&self) -> bool {
+        for node in &self.scene_nodes {
+            if node.visible {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub(crate) fn set_all_visible(&mut self, visible: bool) {
+        for node in &mut self.scene_nodes {
+            node.visible = visible;
+        }
+    }
+
     pub(crate) fn get_invisible_primitives(&self) -> HashSet<usize> {
         let mut invisible = HashSet::new();
 

@@ -210,7 +210,12 @@ impl ApplicationHandler for App {
             DeviceEvent::MouseWheel {
                 delta: MouseScrollDelta::LineDelta(_, y),
             } => {
-                self.input_state.add_mouse_scroll_delta(y);
+                if let Some(app_state) = &mut self.app_state {
+                    let over_viewport = app_state.gui.pointer_pos().is_some_and(|p| self.viewport_rect.contains(p));
+                    if over_viewport {
+                        self.input_state.add_mouse_scroll_delta(y);
+                    }
+                }
             }
             DeviceEvent::Key(_) => {}
             _ => {}
