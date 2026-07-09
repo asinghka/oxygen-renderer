@@ -76,7 +76,11 @@ impl Camera {
         glam::Mat3::from_cols(forward.cross(self.up), self.up, forward)
     }
 
-    pub(crate) fn update_aspect_ratio(&mut self, aspect: f32) {
-        self.aspect = aspect;
+    pub(crate) fn update_aspect_ratio(&mut self, width: f32, height: f32) {
+        if height == 0.0 {
+            self.aspect = 0.0;
+        } else {
+            self.aspect = width / height;
+        }
     }
 }

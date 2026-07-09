@@ -14,7 +14,7 @@ pub(crate) struct Gui {
 impl Gui {
     pub(crate) fn new(window: &Window, device: &wgpu::Device, texture_format: wgpu::TextureFormat) -> Self {
         let context = egui::Context::default();
-        crate::ui::style::apply_style(&context);
+        re_ui::apply_style_and_install_loaders(&context);
 
         let winit_state = egui_winit::State::new(
             context.clone(),

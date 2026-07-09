@@ -1,9 +1,37 @@
 use crate::app::FrameStats;
 use crate::renderer::RenderSettings;
 use egui::load::SizedTexture;
-use egui::{Align, CentralPanel, CollapsingHeader, Frame, Layout, Panel, Slider, Widget};
+use egui::{Align, CentralPanel, CollapsingHeader, Frame, Layout, MenuBar, Panel, Slider, Widget};
+use re_ui::UiExt;
 
 pub(crate) fn build(ui: &mut egui::Ui, texture_id: egui::TextureId, settings: &mut RenderSettings, stats: &FrameStats) -> egui::Rect {
+    Panel::top("top-panel")
+        .frame(ui.tokens().top_panel_frame(re_ui::WindowFrameConfig::Native))
+        .show(ui, |ui| {
+            MenuBar::new().ui(ui, |ui| {
+                ui.set_height(32.0);
+
+                ui.menu_button("File", |ui| {
+                    if ui.button("Load file...").clicked() {
+                        if let Some(_) = rfd::FileDialog::new().add_filter("scene", &["glb"]).pick_file() {}
+                    }
+
+                    ui.separator();
+
+                    if ui.button("Quit").clicked() {}
+                });
+
+                ui.menu_button("View", |ui| {
+                    let _ = ui.button("Reset");
+                });
+
+                ui.menu_button("Settings", |ui| {
+                    let _ = ui.button("Render settings");
+                    let _ = ui.button("Camera");
+                });
+            });
+        });
+
     Panel::bottom("bottom-panel").show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.add_space(12.0);

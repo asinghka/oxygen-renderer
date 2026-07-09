@@ -13,7 +13,6 @@ pub(crate) struct Viewport {
 
     // Held only to keep the GPU resource alive
     depth_texture: wgpu::Texture,
-
     pub(crate) depth_texture_view: wgpu::TextureView,
 }
 
@@ -35,17 +34,24 @@ impl Viewport {
         }
     }
 
-    pub(crate) fn resize(&mut self, device: &wgpu::Device, gui: &mut Gui, width: u32, height: u32) {
+    pub(crate) fn resize(&mut self, device: &wgpu::Device, gui: &mut Gui, width: f32, height: f32) {
+        let width = (gui.pixels_per_point() * width).round() as u32;
+        let height = (gui.pixels_per_point() * height).round() as u32;
+
+        if width == 0 || height == 0 {
+            return;
+        }
+
         self.width = width;
         self.height = height;
 
-        let (texture, texture_view) = Self::create_texture(device, width, height);
+        let (texture, texture_view) = Self::create_texture(device, self.width, self.height);
         gui.renderer
             .update_egui_texture_from_wgpu_texture(device, &texture_view, wgpu::FilterMode::Linear, self.texture_id);
         self.texture = texture;
         self.texture_view = texture_view;
 
-        let (depth_texture, depth_texture_view) = Self::create_depth_texture(device, width, height);
+        let (depth_texture, depth_texture_view) = Self::create_depth_texture(device, self.width, self.height);
         self.depth_texture = depth_texture;
         self.depth_texture_view = depth_texture_view;
     }

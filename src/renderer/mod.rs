@@ -10,10 +10,8 @@ use crate::app::FrameStats;
 use crate::camera::Camera;
 use crate::mesh;
 use crate::mesh::Vertex;
-use crate::ui::{Gui, editor};
 use wgpu::util::DeviceExt;
-use wgpu::{BindGroupDescriptor, Color, CurrentSurfaceTexture, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
-use winit::window::Window;
+use wgpu::{BindGroupDescriptor, Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 
 struct PrimitiveBuffer {
     vertex_buffer: wgpu::Buffer,
@@ -33,12 +31,10 @@ pub(crate) struct Renderer {
 
     camera_uniform_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-
-    viewport: Viewport,
 }
 
 impl Renderer {
-    pub(crate) fn new(camera: &Camera, gpu: &Gpu, gui: &mut Gui, settings: &RenderSettings, stats: &mut FrameStats) -> Self {
+    pub(crate) fn new(camera: &Camera, gpu: &Gpu, settings: &RenderSettings, stats: &mut FrameStats) -> Self {
         let shader_module = gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
@@ -250,8 +246,6 @@ impl Renderer {
             cache: None,
         });
 
-        let viewport = Viewport::new(&gpu.device, gui, gpu.config.width, gpu.config.height);
-
         Self {
             render_pipeline,
             wireframe_pipeline,
@@ -261,46 +255,25 @@ impl Renderer {
             render_settings_bind_group,
             camera_uniform_buffer,
             camera_bind_group,
-            viewport,
         }
     }
 
     pub(crate) fn render(
         &mut self,
-        window: &Window,
         camera: &mut Camera,
         gpu: &Gpu,
-        gui: &mut Gui,
+        encoder: &mut wgpu::CommandEncoder,
+        viewport: &Viewport,
         settings: &mut RenderSettings,
-        stats: &FrameStats,
-    ) -> egui::Rect {
-        let frame = match gpu.surface.get_current_texture() {
-            CurrentSurfaceTexture::Success(frame) => frame,
-            CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            _ => return egui::Rect::NOTHING,
-        };
-
+    ) {
         self.update_settings_uniform_buffer(settings, gpu);
         self.update_camera_uniform_buffer(camera, gpu);
-
-        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-        let mut viewport_rect = egui::Rect::NOTHING;
-        gui.render(window, &gpu.device, &gpu.queue, &mut encoder, &view, |ui| {
-            viewport_rect = editor::build(ui, self.viewport.texture_id, settings, stats);
-        });
-
-        if viewport_rect.size().x > 0.0 && viewport_rect.size().y > 0.0 {
-            self.resize_viewport(camera, gpu, gui, viewport_rect.size());
-        }
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("render-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.viewport.texture_view,
+                    view: &viewport.texture_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: Operations {
@@ -314,7 +287,7 @@ impl Renderer {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.viewport.depth_texture_view,
+                    view: &viewport.depth_texture_view,
                     depth_ops: Some(Operations {
                         load: LoadOp::Clear(1.0),
                         store: StoreOp::Discard,
@@ -341,28 +314,6 @@ impl Renderer {
                 render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
             }
         }
-
-        gpu.queue.submit(std::iter::once(encoder.finish()));
-        frame.present();
-
-        viewport_rect
-    }
-
-    fn resize_viewport(&mut self, camera: &mut Camera, gpu: &Gpu, gui: &mut Gui, size: egui::Vec2) {
-        let pixels_per_point = gui.pixels_per_point();
-        let width = (size.x * pixels_per_point).round() as u32;
-        let height = (size.y * pixels_per_point).round() as u32;
-
-        if width == 0 || height == 0 {
-            return;
-        }
-
-        if self.viewport.width == width && self.viewport.height == height {
-            return;
-        }
-
-        self.viewport.resize(&gpu.device, gui, width, height);
-        camera.update_aspect_ratio(size.x / size.y);
     }
 
     fn update_settings_uniform_buffer(&mut self, settings: &RenderSettings, gpu: &Gpu) {

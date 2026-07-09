@@ -7,10 +7,11 @@ pub(crate) use state::*;
 pub(crate) use stats::*;
 
 use crate::camera::{Camera, CameraController, CameraDescriptor};
-use crate::renderer::{Gpu, RenderSettings, Renderer};
-use crate::ui::Gui;
+use crate::renderer::{Gpu, RenderSettings, Renderer, Viewport};
+use crate::ui::{Gui, editor};
 use std::sync::Arc;
 use std::time::Instant;
+use wgpu::CurrentSurfaceTexture;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
@@ -73,9 +74,10 @@ impl ApplicationHandler for App {
             zfar: 100.0,
         });
 
-        let renderer = Renderer::new(&camera, &gpu, &mut gui, &self.render_settings, &mut self.stats);
+        let renderer = Renderer::new(&camera, &gpu, &self.render_settings, &mut self.stats);
+        let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
 
-        self.app_state = Some(AppState::new(window, camera, gpu, renderer, gui));
+        self.app_state = Some(AppState::new(window, camera, gpu, renderer, gui, viewport));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
@@ -115,14 +117,52 @@ impl ApplicationHandler for App {
 
                 let displacement = self.camera_controller.compute(&mut self.input_state, dt.min(0.1));
                 app_state.camera.displace(displacement);
-                self.viewport_rect = app_state.renderer.render(
+
+                let frame = match app_state.gpu.surface.get_current_texture() {
+                    CurrentSurfaceTexture::Success(frame) => frame,
+                    CurrentSurfaceTexture::Suboptimal(frame) => frame,
+                    _ => return,
+                };
+
+                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+                let mut encoder = app_state.gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+                let mut viewport_rect = egui::Rect::NOTHING;
+                app_state.gui.render(
                     &app_state.window,
+                    &app_state.gpu.device,
+                    &app_state.gpu.queue,
+                    &mut encoder,
+                    &view,
+                    |ui| {
+                        viewport_rect = editor::build(ui, app_state.viewport.texture_id, &mut self.render_settings, &self.stats);
+                    },
+                );
+
+                if self.viewport_rect.size() != viewport_rect.size() {
+                    self.viewport_rect = viewport_rect;
+
+                    app_state.viewport.resize(
+                        &app_state.gpu.device,
+                        &mut app_state.gui,
+                        self.viewport_rect.size().x,
+                        self.viewport_rect.size().y,
+                    );
+
+                    app_state.camera.update_aspect_ratio(viewport_rect.size().x, viewport_rect.size().y);
+                }
+
+                app_state.renderer.render(
                     &mut app_state.camera,
                     &app_state.gpu,
-                    &mut app_state.gui,
+                    &mut encoder,
+                    &app_state.viewport,
                     &mut self.render_settings,
-                    &self.stats,
                 );
+
+                app_state.gpu.queue.submit(std::iter::once(encoder.finish()));
+                frame.present();
             }
             WindowEvent::Resized(size) => {
                 // This only needs to resize the surface as the viewport texture size is handled
