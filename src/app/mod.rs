@@ -7,6 +7,7 @@ pub(crate) use state::*;
 pub(crate) use stats::*;
 
 use crate::camera::{Camera, CameraController, CameraDescriptor};
+use crate::mesh::Scene;
 use crate::renderer::{Gpu, RenderSettings, Renderer, Viewport};
 use crate::ui::{Gui, editor};
 use std::sync::Arc;
@@ -23,6 +24,8 @@ const APP_NAME: &str = "Oxygen";
 pub(crate) struct App {
     app_state: Option<AppState>,
 
+    scene: Scene,
+
     camera_controller: CameraController,
     input_state: InputState,
 
@@ -38,6 +41,7 @@ impl Default for App {
     fn default() -> Self {
         Self {
             app_state: None,
+            scene: Scene::default(),
             camera_controller: CameraController::default(),
             input_state: InputState::default(),
             viewport_rect: egui::Rect::NOTHING,
@@ -74,7 +78,7 @@ impl ApplicationHandler for App {
             zfar: 100.0,
         });
 
-        let renderer = Renderer::new(&camera, &gpu, &self.render_settings, &mut self.stats);
+        let renderer = Renderer::new(&camera, &gpu, &mut self.scene, &self.render_settings, &mut self.stats);
         let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
 
         self.app_state = Some(AppState::new(window, camera, gpu, renderer, gui, viewport));
@@ -144,7 +148,7 @@ impl ApplicationHandler for App {
                     &mut encoder,
                     &view,
                     |ui| {
-                        viewport_rect = editor::build(ui, app_state.viewport.texture_id, &mut self.render_settings, &self.stats);
+                        viewport_rect = editor::build(ui, app_state.viewport.texture_id, &mut self.scene, &mut self.render_settings, &self.stats);
                     },
                 );
 

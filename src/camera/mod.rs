@@ -77,9 +77,7 @@ impl Camera {
     }
 
     pub(crate) fn update_aspect_ratio(&mut self, width: f32, height: f32) {
-        if height == 0.0 {
-            return;
-        } else {
+        if height != 0.0 {
             self.aspect = width / height;
         }
     }

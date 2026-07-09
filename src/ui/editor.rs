@@ -1,10 +1,17 @@
 use crate::app::FrameStats;
+use crate::mesh::{Scene, SceneNode};
 use crate::renderer::RenderSettings;
 use egui::load::SizedTexture;
-use egui::{Align, CentralPanel, CollapsingHeader, Frame, Layout, MenuBar, Panel, Slider, Widget};
+use egui::{Align, CentralPanel, CollapsingHeader, Frame, Layout, MenuBar, Panel, ScrollArea, Slider, Widget};
 use re_ui::UiExt;
 
-pub(crate) fn build(ui: &mut egui::Ui, texture_id: egui::TextureId, settings: &mut RenderSettings, stats: &FrameStats) -> egui::Rect {
+pub(crate) fn build(
+    ui: &mut egui::Ui,
+    texture_id: egui::TextureId,
+    scene: &mut Scene,
+    settings: &mut RenderSettings,
+    stats: &FrameStats,
+) -> egui::Rect {
     Panel::top("top-panel")
         .frame(ui.tokens().top_panel_frame(re_ui::WindowFrameConfig::Native))
         .show(ui, |ui| {
@@ -42,6 +49,19 @@ pub(crate) fn build(ui: &mut egui::Ui, texture_id: egui::TextureId, settings: &m
             });
         });
     });
+
+    Panel::left("left-panel")
+        .frame(Frame::NONE.fill(ui.tokens().panel_bg_color))
+        .show(ui, |ui| {
+            ScrollArea::vertical().show(ui, |ui| {
+                ui.take_available_space();
+                Frame::default().inner_margin(12).show(ui, |ui| {
+                    for &root in &scene.root_indices {
+                        node_tree(ui, &scene.scene_nodes, root);
+                    }
+                });
+            });
+        });
 
     Panel::right("right-panel")
         .frame(Frame::side_top_panel(ui.style()).inner_margin(12))
@@ -90,4 +110,19 @@ pub(crate) fn build(ui: &mut egui::Ui, texture_id: egui::TextureId, settings: &m
         .frame(Frame::NONE)
         .show(ui, |ui| ui.image(SizedTexture::new(texture_id, ui.available_size())).rect)
         .inner
+}
+
+fn node_tree(ui: &mut egui::Ui, nodes: &[SceneNode], index: usize) {
+    let node = &nodes[index];
+    let name = node.name.as_deref().unwrap_or("<unnamed>");
+
+    if node.children.is_empty() {
+        ui.label(name);
+    } else {
+        CollapsingHeader::new(name).id_salt(index).default_open(false).show(ui, |ui| {
+            for &child in &node.children {
+                node_tree(ui, nodes, child);
+            }
+        });
+    }
 }

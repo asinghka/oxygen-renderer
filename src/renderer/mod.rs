@@ -9,7 +9,7 @@ pub(crate) use viewport::*;
 use crate::app::FrameStats;
 use crate::camera::Camera;
 use crate::mesh;
-use crate::mesh::Vertex;
+use crate::mesh::{Scene, Vertex};
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroupDescriptor, Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 
@@ -34,13 +34,14 @@ pub(crate) struct Renderer {
 }
 
 impl Renderer {
-    pub(crate) fn new(camera: &Camera, gpu: &Gpu, settings: &RenderSettings, stats: &mut FrameStats) -> Self {
+    pub(crate) fn new(camera: &Camera, gpu: &Gpu, scene: &mut Scene, settings: &RenderSettings, stats: &mut FrameStats) -> Self {
         let shader_module = gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
-        let (primitives, num_vertices, num_indices) = mesh::load("assets/car.glb");
+        let (loaded_scene, primitives, num_vertices, num_indices) = mesh::load("assets/car.glb");
+        *scene = loaded_scene;
         stats.set_model(num_vertices, num_indices);
 
         let primitive_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
