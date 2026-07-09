@@ -39,7 +39,7 @@ impl Renderer {
             source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
-        let loaded_scene = mesh::load("assets/car.glb");
+        let loaded_scene = mesh::load("assets/dragon.glb");
         *scene = loaded_scene;
 
         let primitive_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

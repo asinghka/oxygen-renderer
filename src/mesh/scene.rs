@@ -58,39 +58,15 @@ impl Scene {
     pub(crate) fn get_invisible_primitives(&self) -> HashSet<usize> {
         let mut invisible = HashSet::new();
 
-        for root_index in &self.root_indices {
-            let node = &self.scene_nodes[*root_index];
-
-            if Some(false) == node.visible {
-                for primitive in &node.primitives {
-                    invisible.insert(*primitive);
+        for node in &self.scene_nodes {
+            if let Some(false) = node.visible {
+                for primitive_index in &node.primitives {
+                    invisible.insert(*primitive_index);
                 }
-            }
-
-            for child in &node.children {
-                self.insert_invisible_children(*child, &mut invisible);
             }
         }
 
         invisible
-    }
-
-    fn insert_invisible_children(&self, index: usize, invisible: &mut HashSet<usize>) {
-        let node = &self.scene_nodes[index];
-
-        if Some(false) == node.visible {
-            for primitive in &node.primitives {
-                invisible.insert(*primitive);
-            }
-        }
-
-        if node.children.is_empty() {
-            return;
-        }
-
-        for child in &node.children {
-            self.insert_invisible_children(*child, invisible);
-        }
     }
 
     pub(crate) fn get_visible_primitive_stats(&self) -> (u32, u32) {
