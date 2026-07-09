@@ -58,7 +58,7 @@ fn visit(
 
     if let Some(mesh) = node.mesh() {
         for primitive in mesh.primitives() {
-            scene_node.primitives.push(*primitive_index);
+            scene_node.add_primitive(*primitive_index);
             *primitive_index += 1;
 
             let mut vertices: Vec<Vertex> = Vec::new();

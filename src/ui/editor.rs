@@ -1,6 +1,7 @@
 use crate::app::FrameStats;
 use crate::mesh::{Scene, SceneNode};
 use crate::renderer::RenderSettings;
+use egui::collapsing_header::CollapsingState;
 use egui::load::SizedTexture;
 use egui::{Align, Button, CentralPanel, CollapsingHeader, Frame, Layout, Margin, MenuBar, Panel, ScrollArea, Slider, Widget};
 use re_ui::UiExt;
@@ -52,6 +53,7 @@ pub(crate) fn build(
 
     Panel::left("left-panel")
         .frame(Frame::NONE.fill(ui.tokens().panel_bg_color))
+        .min_size(260.0)
         .show(ui, |ui| {
             Panel::top("left-panel-header")
                 .exact_size(ui.tokens().title_bar_height())
@@ -139,37 +141,44 @@ pub(crate) fn build(
 }
 
 fn node_tree(ui: &mut egui::Ui, nodes: &mut [SceneNode], index: usize) {
-    let node = &mut nodes[index];
-    let children = node.children.clone();
-    let name = node.name.as_deref().unwrap_or("<unnamed>");
+    let children = nodes[index].children.clone();
 
-    if node.children.is_empty() {
+    if children.is_empty() {
         ui.horizontal(|ui| {
-            ui.visuals_mut().widgets.hovered.expansion = 0.0;
-            ui.visuals_mut().widgets.active.expansion = 0.0;
-
-            ui.label(name);
-
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let icon = if node.visible {
-                    &re_ui::icons::VISIBLE
-                } else {
-                    &re_ui::icons::INVISIBLE
-                };
-
-                let image = icon.as_image().fit_to_exact_size(ui.tokens().small_icon_size);
-                let response = Button::image(image).image_tint_follows_text_color(true).small().ui(ui);
-
-                if response.clicked() {
-                    node.visible = !node.visible;
-                }
-            });
+            let indent = ui.spacing().indent;
+            ui.add_space(indent);
+            visibility_row(ui, &mut nodes[index]);
         });
     } else {
-        CollapsingHeader::new(name).id_salt(index).default_open(false).show(ui, |ui| {
+        let id = ui.make_persistent_id(index);
+        let header = CollapsingState::load_with_default_open(ui.ctx(), id, false).show_header(ui, |ui| visibility_row(ui, &mut nodes[index]));
+
+        header.body(|ui| {
             for child in children {
                 node_tree(ui, nodes, child);
             }
         });
     }
+}
+
+fn visibility_row(ui: &mut egui::Ui, node: &mut SceneNode) {
+    ui.visuals_mut().widgets.hovered.expansion = 0.0;
+    ui.visuals_mut().widgets.active.expansion = 0.0;
+
+    let name = node.name.as_deref().unwrap_or("<unnamed>");
+    ui.label(name);
+
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        match node.visible {
+            Some(visible) => {
+                let icon = if visible { &re_ui::icons::VISIBLE } else { &re_ui::icons::INVISIBLE };
+
+                let image = icon.as_image().fit_to_exact_size(ui.tokens().small_icon_size);
+                if Button::image(image).image_tint_follows_text_color(true).small().ui(ui).clicked() {
+                    node.visible = Some(!visible);
+                }
+            }
+            None => {}
+        };
+    });
 }

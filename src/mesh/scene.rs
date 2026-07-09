@@ -4,8 +4,8 @@ use std::collections::HashSet;
 pub(crate) struct SceneNode {
     pub(crate) name: Option<String>,
     pub(crate) children: Vec<usize>,
-    pub(crate) primitives: Vec<usize>,
-    pub(crate) visible: bool,
+    primitives: Vec<usize>,
+    pub(crate) visible: Option<bool>,
 }
 
 impl SceneNode {
@@ -14,7 +14,16 @@ impl SceneNode {
             name,
             children: vec![],
             primitives: vec![],
-            visible: true,
+            visible: None,
+        }
+    }
+}
+
+impl SceneNode {
+    pub fn add_primitive(&mut self, primitive_index: usize) {
+        self.primitives.push(primitive_index);
+        if self.visible.is_none() {
+            self.visible = Some(true);
         }
     }
 }
@@ -28,7 +37,7 @@ pub(crate) struct Scene {
 impl Scene {
     pub(crate) fn at_least_one_visible(&self) -> bool {
         for node in &self.scene_nodes {
-            if node.visible {
+            if let Some(true) = node.visible {
                 return true;
             }
         }
@@ -38,7 +47,9 @@ impl Scene {
 
     pub(crate) fn set_all_visible(&mut self, visible: bool) {
         for node in &mut self.scene_nodes {
-            node.visible = visible;
+            if node.visible.is_some() {
+                node.visible = Some(visible);
+            }
         }
     }
 
@@ -48,7 +59,7 @@ impl Scene {
         for root_index in self.root_indices.iter() {
             let node = &self.scene_nodes[*root_index];
 
-            if !node.visible {
+            if Some(false) == node.visible {
                 for primitive in &node.primitives {
                     invisible.insert(*primitive);
                 }
@@ -65,7 +76,7 @@ impl Scene {
     fn insert_invisible_children(&self, index: usize, invisible: &mut HashSet<usize>) {
         let node = &self.scene_nodes[index];
 
-        if !node.visible {
+        if Some(false) == node.visible {
             for primitive in &node.primitives {
                 invisible.insert(*primitive);
             }
