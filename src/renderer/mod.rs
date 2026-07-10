@@ -9,7 +9,7 @@ pub(crate) use viewport::*;
 use crate::camera::Camera;
 use crate::mesh::{Primitive, Scene, Vertex};
 use wgpu::util::DeviceExt;
-use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
+use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TexelCopyBufferLayout, TextureDimension, TextureFormat, TextureUsages};
 
 struct PrimitiveBuffer {
     vertex_buffer: wgpu::Buffer,
@@ -34,6 +34,8 @@ pub(crate) struct Renderer {
 
     camera_uniform_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+
+    texture_views: Vec<Option<wgpu::TextureView>>,
 }
 
 impl Renderer {
@@ -78,6 +80,7 @@ impl Renderer {
             render_settings_bind_group,
             camera_uniform_buffer,
             camera_bind_group,
+            texture_views: Vec::new(),
         }
     }
 
@@ -160,6 +163,7 @@ impl Renderer {
         let (primitive_buffers, primitive_bind_groups) = build_primitives(&gpu.device, &self.primitive_bind_group_layout, scene);
         self.primitive_buffers = primitive_buffers;
         self.primitive_bind_groups = primitive_bind_groups;
+        self.texture_views = create_texture_views(&gpu.device, &gpu.queue, scene);
     }
 
     fn update_settings_uniform_buffer(&mut self, settings: &RenderSettings, gpu: &Gpu) {
@@ -201,7 +205,7 @@ fn build_pipelines(
             topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
-            cull_mode: None,
+            cull_mode: Some(wgpu::Face::Back),
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
@@ -411,6 +415,46 @@ fn build_primitives(
     }
 
     (primitive_buffers, primitive_bind_groups)
+}
+
+fn create_texture_views(device: &wgpu::Device, queue: &wgpu::Queue, scene: &Scene) -> Vec<Option<wgpu::TextureView>> {
+    scene
+        .textures
+        .iter()
+        .map(|tex_data| {
+            let tex_data = tex_data.as_ref()?;
+
+            let size = wgpu::Extent3d {
+                width: tex_data.width,
+                height: tex_data.height,
+                depth_or_array_layers: 1,
+            };
+
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("base-color"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8UnormSrgb,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+
+            queue.write_texture(
+                texture.as_image_copy(),
+                &tex_data.pixels,
+                TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * size.width),
+                    rows_per_image: Some(size.height),
+                },
+                size,
+            );
+
+            Some(texture.create_view(&wgpu::TextureViewDescriptor::default()))
+        })
+        .collect()
 }
 
 fn build_render_settings(device: &wgpu::Device, settings: &RenderSettings) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
