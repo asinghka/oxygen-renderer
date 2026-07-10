@@ -26,15 +26,23 @@ var<uniform> settings: RenderSettings;
 @group(2) @binding(0)
 var<uniform> primitive: Primitive;
 
+@group(2) @binding(1)
+var tex_color: texture_2d<f32>;
+
+@group(2) @binding(2)
+var tex_sampler: sampler;
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
 }
 
 struct VertexOutput {
     @builtin(position) clip_pos: vec4<f32>,
     @location(0) world_pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
 }
 
 @vertex
@@ -47,8 +55,10 @@ fn vertex_shader(in: VertexInput) -> VertexOutput {
     let world_pos = model * vec4<f32>(in.position, 1.0);
 
     out.world_pos = world_pos.xyz;
+
     out.normal = (normal_model * vec4<f32>(in.normal, 0.0)).xyz;
     out.clip_pos = camera.view_projection * world_pos;
+    out.uv = in.uv;
 
     return out;
 }
@@ -60,7 +70,8 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
     let light_dir = normalize(vec3<f32>(0.4, 0.8, 0.6));
 
     let ambient = settings.ambient;
-    let albedo = primitive.color.xyz;
+
+    let albedo = textureSample(tex_color, tex_sampler, in.uv).rgb * primitive.color.rgb;
 
     let n_dot_l = dot(n, light_dir);
 

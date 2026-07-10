@@ -9,6 +9,7 @@ pub(crate) use viewport::*;
 use crate::camera::Camera;
 use crate::mesh::{Primitive, Scene, Vertex};
 use wgpu::util::DeviceExt;
+use wgpu::wgt::{SamplerDescriptor, TextureDataOrder};
 use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TexelCopyBufferLayout, TextureDimension, TextureFormat, TextureUsages};
 
 struct PrimitiveBuffer {
@@ -35,13 +36,47 @@ pub(crate) struct Renderer {
     camera_uniform_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 
+    texture_sampler: wgpu::Sampler,
     texture_views: Vec<Option<wgpu::TextureView>>,
+    placeholder_view: wgpu::TextureView,
 }
 
 impl Renderer {
     pub(crate) fn new(camera: &Camera, gpu: &Gpu, settings: &RenderSettings) -> Self {
         let primitive_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("primitive-bind-group-layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+
+        let grid_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("grid-bind-group-layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
@@ -54,18 +89,58 @@ impl Renderer {
             }],
         });
 
-        let (grid_buffer, grid_bind_group) = build_grid(&gpu.device, &primitive_bind_group_layout);
+        let texture_sampler = gpu.device.create_sampler(&SamplerDescriptor {
+            label: Some("texture-sampler"),
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 0.0,
+            compare: None,
+            anisotropy_clamp: 1,
+            border_color: None,
+        });
+
+        let placeholder_texture = gpu.device.create_texture_with_data(
+            &gpu.queue,
+            &wgpu::TextureDescriptor {
+                label: Some("placeholder-texture"),
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8UnormSrgb,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                view_formats: &[],
+            },
+            TextureDataOrder::LayerMajor,
+            &[255_u8; 4],
+        );
+
+        let placeholder_view = placeholder_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let (grid_buffer, grid_bind_group) = build_grid(&gpu.device, &grid_bind_group_layout);
         let (render_settings_uniform_buffer, render_settings_bind_group_layout, render_settings_bind_group) =
             build_render_settings(&gpu.device, settings);
         let (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group) = build_camera(&gpu.device, camera);
 
-        let bind_group_layouts = &[
+        let primitive_bind_group_layouts = &[
             Some(&camera_bind_group_layout),
             Some(&render_settings_bind_group_layout),
             Some(&primitive_bind_group_layout),
         ];
 
-        let (render_pipeline, wireframe_pipeline, line_pipeline) = build_pipelines(&gpu.device, bind_group_layouts);
+        let grid_bind_group_layouts = &[Some(&camera_bind_group_layout), Some(&grid_bind_group_layout)];
+
+        let (render_pipeline, wireframe_pipeline, line_pipeline) =
+            build_pipelines(&gpu.device, primitive_bind_group_layouts, grid_bind_group_layouts);
 
         Self {
             render_pipeline,
@@ -80,7 +155,9 @@ impl Renderer {
             render_settings_bind_group,
             camera_uniform_buffer,
             camera_bind_group,
+            texture_sampler,
             texture_views: Vec::new(),
+            placeholder_view,
         }
     }
 
@@ -160,10 +237,18 @@ impl Renderer {
     }
 
     pub(crate) fn load(&mut self, gpu: &Gpu, scene: &Scene) {
-        let (primitive_buffers, primitive_bind_groups) = build_primitives(&gpu.device, &self.primitive_bind_group_layout, scene);
+        self.texture_views = create_texture_views(&gpu.device, &gpu.queue, scene);
+
+        let (primitive_buffers, primitive_bind_groups) = build_primitives(
+            &gpu.device,
+            &self.primitive_bind_group_layout,
+            &self.texture_views,
+            &self.texture_sampler,
+            &self.placeholder_view,
+            scene,
+        );
         self.primitive_buffers = primitive_buffers;
         self.primitive_bind_groups = primitive_bind_groups;
-        self.texture_views = create_texture_views(&gpu.device, &gpu.queue, scene);
     }
 
     fn update_settings_uniform_buffer(&mut self, settings: &RenderSettings, gpu: &Gpu) {
@@ -179,7 +264,8 @@ impl Renderer {
 
 fn build_pipelines(
     device: &wgpu::Device,
-    bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
+    primitive_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
+    grid_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
 ) -> (wgpu::RenderPipeline, wgpu::RenderPipeline, wgpu::RenderPipeline) {
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("shader"),
@@ -188,7 +274,7 @@ fn build_pipelines(
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("render-pipeline-layout"),
-        bind_group_layouts,
+        bind_group_layouts: primitive_bind_group_layouts,
         immediate_size: 0,
     });
 
@@ -279,7 +365,7 @@ fn build_pipelines(
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("grid-pipeline-layout"),
-        bind_group_layouts: &[bind_group_layouts[0], bind_group_layouts[2]],
+        bind_group_layouts: grid_bind_group_layouts,
         immediate_size: 0,
     });
 
@@ -326,7 +412,7 @@ fn build_pipelines(
     (render_pipeline, wireframe_pipeline, grid_pipeline)
 }
 
-fn build_grid(device: &wgpu::Device, primitive_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {
+fn build_grid(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {
     let grid_primitive = Primitive::grid(30.0, 16);
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -355,21 +441,24 @@ fn build_grid(device: &wgpu::Device, primitive_bind_group_layout: &wgpu::BindGro
         usage: wgpu::BufferUsages::UNIFORM,
     });
 
-    let primitive_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("primitive-bind-group"),
-        layout: primitive_bind_group_layout,
+    let grid_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("grid-bind-group"),
+        layout: grid_bind_group_layout,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: primitive_uniform_buffer.as_entire_binding(),
         }],
     });
 
-    (grid_buffer, primitive_bind_group)
+    (grid_buffer, grid_bind_group)
 }
 
 fn build_primitives(
     device: &wgpu::Device,
     primitive_bind_group_layout: &wgpu::BindGroupLayout,
+    texture_views: &[Option<wgpu::TextureView>],
+    texture_sampler: &wgpu::Sampler,
+    placeholder_view: &wgpu::TextureView,
     scene: &Scene,
 ) -> (Vec<PrimitiveBuffer>, Vec<wgpu::BindGroup>) {
     let mut primitive_buffers = Vec::new();
@@ -402,13 +491,28 @@ fn build_primitives(
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
+        let texture_view = primitive
+            .texture
+            .and_then(|index| texture_views[index].as_ref())
+            .unwrap_or(placeholder_view);
+
         let primitive_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("primitive-bind-group"),
             layout: primitive_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: primitive_uniform_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: primitive_uniform_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(texture_sampler),
+                },
+            ],
         });
 
         primitive_bind_groups.push(primitive_bind_group);
