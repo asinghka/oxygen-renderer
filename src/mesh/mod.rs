@@ -1,15 +1,18 @@
 mod primitive;
 mod scene;
+mod texture;
 mod vertex;
 
+use crate::mesh::texture::TextureData;
 use gltf::Node;
 use gltf::buffer::Data;
+use gltf::image::Format;
 pub(crate) use primitive::*;
 pub(crate) use scene::*;
 pub(crate) use vertex::*;
 
 pub(crate) fn load(path: String) -> Scene {
-    let (document, buffers, _) = gltf::import(path).expect("Failed to load glTF file");
+    let (document, buffers, images) = gltf::import(path).expect("Failed to load glTF file");
 
     let mut scene_nodes = Vec::with_capacity(document.nodes().count());
     let mut root_indices = Vec::new();
@@ -32,10 +35,37 @@ pub(crate) fn load(path: String) -> Scene {
         root_indices.push(root_index);
     }
 
+    let mut textures = Vec::with_capacity(images.len());
+    for image in images {
+        let width = image.width;
+        let height = image.height;
+
+        let texture = match image.format {
+            Format::R8G8B8 => {
+                Some(TextureData {
+                    pixels: expand_rgb_to_rgba(image.pixels),
+                    width,
+                    height,
+                })
+            }
+            Format::R8G8B8A8 => {
+                Some(TextureData {
+                    pixels: image.pixels,
+                    width,
+                    height,
+                })
+            }
+            _ => None,
+        };
+
+        textures.push(texture);
+    }
+
     Scene {
         scene_nodes,
         root_indices,
         primitives,
+        textures,
     }
 }
 
@@ -63,9 +93,11 @@ fn visit(
 
             let positions = reader.read_positions().expect("Failed to read positions");
             let normals = reader.read_normals().expect("Failed to read normals");
+            let uvs = reader.read_tex_coords(0).map(|tex_coords| tex_coords.into_f32().collect::<Vec<_>>());
+            let uvs = uvs.into_iter().flatten().chain(std::iter::repeat([0.0, 0.0]));
 
-            for (position, normal) in positions.zip(normals) {
-                vertices.push(Vertex { position, normal });
+            for ((position, normal), uv) in positions.zip(normals).zip(uvs) {
+                vertices.push(Vertex { position, normal, uv });
             }
 
             let read_indices = reader.read_indices().expect("Failed to read indices");
@@ -74,12 +106,18 @@ fn visit(
             }
 
             let color = primitive.material().pbr_metallic_roughness().base_color_factor();
+            let texture = primitive
+                .material()
+                .pbr_metallic_roughness()
+                .base_color_texture()
+                .map(|info| info.texture().source().index());
 
             primitives.push(Primitive {
                 vertices,
                 indices,
                 model,
                 color,
+                texture,
             })
         }
     }
@@ -91,4 +129,11 @@ fn visit(
 
     scene_nodes.push(scene_node);
     scene_nodes.len() - 1
+}
+
+fn expand_rgb_to_rgba(pixels: Vec<u8>) -> Vec<u8> {
+    pixels
+        .chunks_exact(3)
+        .flat_map(|pixels| [pixels[0], pixels[1], pixels[2], 255_u8])
+        .collect()
 }

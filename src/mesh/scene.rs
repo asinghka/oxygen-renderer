@@ -1,4 +1,5 @@
 use crate::mesh::Primitive;
+use crate::mesh::texture::TextureData;
 use std::collections::HashSet;
 
 #[derive(Debug)]
@@ -34,6 +35,7 @@ pub(crate) struct Scene {
     pub(crate) scene_nodes: Vec<SceneNode>,
     pub(crate) primitives: Vec<Primitive>,
     pub(crate) root_indices: Vec<usize>,
+    pub(crate) textures: Vec<Option<TextureData>>,
 }
 
 impl Scene {

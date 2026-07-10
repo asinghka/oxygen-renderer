@@ -3,6 +3,7 @@
 pub(crate) struct Vertex {
     pub(crate) position: [f32; 3],
     pub(crate) normal: [f32; 3],
+    pub(crate) uv: [f32; 2],
 }
 
 impl Vertex {
@@ -20,6 +21,11 @@ impl Vertex {
                     format: wgpu::VertexFormat::Float32x3,
                     offset: size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
+                },
+                wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x2,
+                    offset: 2 * size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 2,
                 },
             ],
         }

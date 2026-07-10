@@ -17,6 +17,7 @@ pub(crate) struct Primitive {
     pub(crate) indices: Vec<u32>,
     pub(crate) model: glam::Mat4,
     pub(crate) color: [f32; 4],
+    pub(crate) texture: Option<usize>,
 }
 
 impl Primitive {
@@ -27,6 +28,7 @@ impl Primitive {
 
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
+        let uv = [0.0, 0.0];
 
         for n in 0..=divisions {
             let offset = -half + n as f32 * step;
@@ -35,10 +37,12 @@ impl Primitive {
             vertices.push(Vertex {
                 position: [-half, 0.0, offset],
                 normal,
+                uv,
             });
             vertices.push(Vertex {
                 position: [half, 0.0, offset],
                 normal,
+                uv,
             });
             indices.push(base);
             indices.push(base + 1);
@@ -47,10 +51,12 @@ impl Primitive {
             vertices.push(Vertex {
                 position: [offset, 0.0, -half],
                 normal,
+                uv,
             });
             vertices.push(Vertex {
                 position: [offset, 0.0, half],
                 normal,
+                uv,
             });
             indices.push(base);
             indices.push(base + 1);
@@ -61,6 +67,7 @@ impl Primitive {
             indices,
             model: glam::Mat4::from_translation(-glam::Vec3::Y),
             color: [0.5, 0.5, 0.5, 1.0],
+            texture: None,
         }
     }
 
