@@ -5,31 +5,23 @@ pub(crate) struct Viewport {
     pub(crate) width: u32,
     pub(crate) height: u32,
 
-    // Held only to keep the GPU resource alive
-    texture: wgpu::Texture,
-
-    pub(crate) texture_view: wgpu::TextureView,
     pub(crate) texture_id: egui::TextureId,
-
-    // Held only to keep the GPU resource alive
-    depth_texture: wgpu::Texture,
+    pub(crate) texture_view: wgpu::TextureView,
     pub(crate) depth_texture_view: wgpu::TextureView,
 }
 
 impl Viewport {
     pub(crate) fn new(device: &wgpu::Device, gui: &mut Gui, width: u32, height: u32) -> Self {
-        let (texture, texture_view) = Self::create_texture(device, width, height);
+        let texture_view = Self::create_texture_view(device, width, height);
         let texture_id = gui.renderer.register_native_texture(device, &texture_view, wgpu::FilterMode::Linear);
 
-        let (depth_texture, depth_texture_view) = Self::create_depth_texture(device, width, height);
+        let depth_texture_view = Self::create_depth_texture_view(device, width, height);
 
         Self {
             width,
             height,
-            texture,
-            texture_view,
             texture_id,
-            depth_texture,
+            texture_view,
             depth_texture_view,
         }
     }
@@ -45,18 +37,14 @@ impl Viewport {
         self.width = width;
         self.height = height;
 
-        let (texture, texture_view) = Self::create_texture(device, self.width, self.height);
+        self.texture_view = Self::create_texture_view(device, self.width, self.height);
         gui.renderer
-            .update_egui_texture_from_wgpu_texture(device, &texture_view, wgpu::FilterMode::Linear, self.texture_id);
-        self.texture = texture;
-        self.texture_view = texture_view;
+            .update_egui_texture_from_wgpu_texture(device, &self.texture_view, wgpu::FilterMode::Linear, self.texture_id);
 
-        let (depth_texture, depth_texture_view) = Self::create_depth_texture(device, self.width, self.height);
-        self.depth_texture = depth_texture;
-        self.depth_texture_view = depth_texture_view;
+        self.depth_texture_view = Self::create_depth_texture_view(device, self.width, self.height);
     }
 
-    fn create_texture(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::Texture, wgpu::TextureView) {
+    fn create_texture_view(device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("viewport-texture"),
             size: Extent3d {
@@ -72,11 +60,10 @@ impl Viewport {
             view_formats: &[],
         });
 
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        (texture, texture_view)
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
-    fn create_depth_texture(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::Texture, wgpu::TextureView) {
+    fn create_depth_texture_view(device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("viewport-depth-texture"),
             size: Extent3d {
@@ -92,8 +79,6 @@ impl Viewport {
             view_formats: &[],
         });
 
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        (texture, texture_view)
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 }
