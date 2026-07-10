@@ -23,6 +23,7 @@ pub(crate) struct RenderSettings {
     pub(crate) shininess: f32,
     pub(crate) background: [f32; 3],
     pub(crate) wireframe: bool,
+    pub(crate) grid: bool,
 }
 
 impl Default for RenderSettings {
@@ -35,6 +36,7 @@ impl Default for RenderSettings {
             shininess: 0.7,
             background: [0.08; 3],
             wireframe: false,
+            grid: true,
         }
     }
 }

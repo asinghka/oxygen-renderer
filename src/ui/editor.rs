@@ -5,6 +5,14 @@ use egui::collapsing_header::CollapsingState;
 use egui::load::SizedTexture;
 use egui::{Align, Button, CentralPanel, CollapsingHeader, Frame, Layout, Margin, MenuBar, Panel, ScrollArea, Slider, Widget};
 use re_ui::UiExt;
+use std::collections::VecDeque;
+use std::path::PathBuf;
+
+pub(crate) enum EditorCommand {
+    LoadFile(PathBuf),
+    ResetCamera,
+    Quit,
+}
 
 pub(crate) fn build(
     ui: &mut egui::Ui,
@@ -12,6 +20,7 @@ pub(crate) fn build(
     scene: &mut Scene,
     settings: &mut RenderSettings,
     stats: &FrameStats,
+    editor_commands: &mut VecDeque<EditorCommand>,
 ) -> egui::Rect {
     Panel::top("top-panel")
         .frame(ui.tokens().top_panel_frame(re_ui::WindowFrameConfig::Native))
@@ -21,21 +30,22 @@ pub(crate) fn build(
 
                 ui.menu_button("File", |ui| {
                     if ui.button("Load file...").clicked() {
-                        if let Some(_) = rfd::FileDialog::new().add_filter("scene", &["glb"]).pick_file() {}
+                        if let Some(path) = rfd::FileDialog::new().add_filter("scene", &["glb"]).pick_file() {
+                            editor_commands.push_back(EditorCommand::LoadFile(path));
+                        }
                     }
 
                     ui.separator();
 
-                    if ui.button("Quit").clicked() {}
+                    if ui.button("Quit").clicked() {
+                        editor_commands.push_back(EditorCommand::Quit);
+                    }
                 });
 
                 ui.menu_button("View", |ui| {
-                    let _ = ui.button("Reset");
-                });
-
-                ui.menu_button("Settings", |ui| {
-                    let _ = ui.button("Render settings");
-                    let _ = ui.button("Camera");
+                    if ui.button("Reset Camera").clicked() {
+                        editor_commands.push_back(EditorCommand::ResetCamera);
+                    }
                 });
             });
         });
@@ -53,7 +63,7 @@ pub(crate) fn build(
 
     Panel::left("left-panel")
         .frame(Frame::NONE.fill(ui.tokens().panel_bg_color))
-        .min_size(260.0)
+        .default_size(260.0)
         .show(ui, |ui| {
             Panel::top("left-panel-header")
                 .exact_size(ui.tokens().title_bar_height())
@@ -82,7 +92,7 @@ pub(crate) fn build(
 
             ScrollArea::vertical().show(ui, |ui| {
                 ui.take_available_space();
-                Frame::default().inner_margin(12).show(ui, |ui| {
+                Frame::default().inner_margin(ui.tokens().view_padding()).show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 6.0;
                     for &root in &scene.root_indices {
                         node_tree(ui, &mut scene.scene_nodes, root);
@@ -92,46 +102,66 @@ pub(crate) fn build(
         });
 
     Panel::right("right-panel")
-        .frame(Frame::side_top_panel(ui.style()).inner_margin(12))
+        .frame(Frame::NONE.fill(ui.tokens().panel_bg_color))
+        .default_size(220.0)
         .show(ui, |ui| {
             ui.take_available_space();
 
-            CollapsingHeader::new("Rendering").show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 4.0;
+            Panel::top("right-panel-header")
+                .exact_size(ui.tokens().title_bar_height())
+                .frame(Frame::default().inner_margin(Margin::symmetric(ui.tokens().view_padding(), 0)))
+                .show(ui, |ui| {
+                    ui.horizontal_centered(|ui| {
+                        ui.strong("Settings");
+                    });
+                });
 
-                ui.label("Wireframe Mode");
-                ui.checkbox(&mut settings.wireframe, "");
+            Frame::NONE
+                .fill(ui.tokens().panel_bg_color)
+                .inner_margin(ui.tokens().view_padding())
+                .show(ui, |ui| {
+                    CollapsingHeader::new("Rendering").show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 4.0;
 
-                ui.add_space(12.0);
+                        ui.label("Wireframe Mode");
+                        ui.checkbox(&mut settings.wireframe, "");
 
-                ui.label("Ambient Light Strength");
-                Slider::new(&mut settings.ambient, 0.0..=1.0).ui(ui);
+                        ui.add_space(12.0);
 
-                ui.add_space(12.0);
+                        ui.label("Ambient Light Strength");
+                        Slider::new(&mut settings.ambient, 0.0..=1.0).ui(ui);
 
-                ui.label("Diffuse Lighting");
-                ui.checkbox(&mut settings.diffuse, "");
+                        ui.add_space(12.0);
 
-                ui.add_space(12.0);
+                        ui.label("Diffuse Lighting");
+                        ui.checkbox(&mut settings.diffuse, "");
 
-                ui.label("Specular Highlights");
-                ui.checkbox(&mut settings.specular, "");
+                        ui.add_space(12.0);
 
-                ui.label("Specular Strength");
-                Slider::new(&mut settings.specular_strength, 0.0..=1.0).ui(ui);
+                        ui.label("Specular Highlights");
+                        ui.checkbox(&mut settings.specular, "");
 
-                ui.label("Shininess");
-                Slider::new(&mut settings.shininess, 0.0..=1.0).ui(ui);
-            });
+                        ui.label("Specular Strength");
+                        Slider::new(&mut settings.specular_strength, 0.0..=1.0).ui(ui);
 
-            ui.add_space(12.0);
+                        ui.label("Shininess");
+                        Slider::new(&mut settings.shininess, 0.0..=1.0).ui(ui);
+                    });
 
-            CollapsingHeader::new("Scene").show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 4.0;
+                    ui.add_space(12.0);
 
-                ui.label("Background Color");
-                ui.color_edit_button_rgb(&mut settings.background);
-            });
+                    CollapsingHeader::new("Scene").show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 4.0;
+
+                        ui.label("Show grid");
+                        ui.checkbox(&mut settings.grid, "");
+
+                        ui.add_space(12.0);
+
+                        ui.label("Background Color");
+                        ui.color_edit_button_rgb(&mut settings.background);
+                    });
+                });
         });
 
     CentralPanel::default()
@@ -169,16 +199,13 @@ fn visibility_row(ui: &mut egui::Ui, node: &mut SceneNode) {
     ui.label(name);
 
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        match node.visible {
-            Some(visible) => {
-                let icon = if visible { &re_ui::icons::VISIBLE } else { &re_ui::icons::INVISIBLE };
+        if let Some(visible) = node.visible {
+            let icon = if visible { &re_ui::icons::VISIBLE } else { &re_ui::icons::INVISIBLE };
 
-                let image = icon.as_image().fit_to_exact_size(ui.tokens().small_icon_size);
-                if Button::image(image).image_tint_follows_text_color(true).small().ui(ui).clicked() {
-                    node.visible = Some(!visible);
-                }
+            let image = icon.as_image().fit_to_exact_size(ui.tokens().small_icon_size);
+            if Button::image(image).image_tint_follows_text_color(true).small().ui(ui).clicked() {
+                node.visible = Some(!visible);
             }
-            None => {}
         };
     });
 }

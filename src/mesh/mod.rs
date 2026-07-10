@@ -8,7 +8,7 @@ pub(crate) use primitive::*;
 pub(crate) use scene::*;
 pub(crate) use vertex::*;
 
-pub(crate) fn load(path: &str) -> Scene {
+pub(crate) fn load(path: String) -> Scene {
     let (document, buffers, _) = gltf::import(path).expect("Failed to load glTF file");
 
     let mut scene_nodes = Vec::with_capacity(document.nodes().count());

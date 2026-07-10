@@ -17,6 +17,21 @@ pub(crate) struct CameraDescriptor {
     pub(crate) zfar: f32,
 }
 
+impl Default for CameraDescriptor {
+    fn default() -> Self {
+        CameraDescriptor {
+            eye: glam::vec3(0.0, 0.0, 2.0),
+            yaw: 0.0,
+            pitch: 0.0,
+            up: glam::Vec3::Y,
+            aspect: 1.0,
+            fovy: 45.0,
+            znear: 0.1,
+            zfar: 100.0,
+        }
+    }
+}
+
 pub(crate) struct Camera {
     eye: glam::Vec3,
     yaw: f32,
@@ -68,12 +83,15 @@ impl Camera {
     }
 
     fn forward(&self) -> glam::Vec3 {
-        glam::Vec3::new(-self.yaw.sin() * self.pitch.cos(), self.pitch.sin(), -self.yaw.cos() * self.pitch.cos())
+        glam::Vec3::new(-self.yaw.sin() * self.pitch.cos(), self.pitch.sin(), -self.yaw.cos() * self.pitch.cos()).normalize()
     }
 
     fn basis(&self) -> glam::Mat3 {
         let forward = self.forward();
-        glam::Mat3::from_cols(forward.cross(self.up), self.up, forward)
+        let right = forward.cross(self.up).normalize();
+        let up = right.cross(forward).normalize();
+
+        glam::Mat3::from_cols(right, up, forward)
     }
 
     pub(crate) fn update_aspect_ratio(&mut self, width: f32, height: f32) {

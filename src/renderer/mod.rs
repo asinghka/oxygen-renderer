@@ -7,10 +7,9 @@ pub(crate) use settings::*;
 pub(crate) use viewport::*;
 
 use crate::camera::Camera;
-use crate::mesh;
-use crate::mesh::{Scene, Vertex};
+use crate::mesh::{Primitive, Scene, Vertex};
 use wgpu::util::DeviceExt;
-use wgpu::{BindGroupDescriptor, Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
+use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 
 struct PrimitiveBuffer {
     vertex_buffer: wgpu::Buffer,
@@ -21,9 +20,14 @@ struct PrimitiveBuffer {
 pub(crate) struct Renderer {
     render_pipeline: wgpu::RenderPipeline,
     wireframe_pipeline: wgpu::RenderPipeline,
+    line_pipeline: wgpu::RenderPipeline,
+
+    grid_buffer: PrimitiveBuffer,
+    grid_bind_group: wgpu::BindGroup,
 
     primitive_buffers: Vec<PrimitiveBuffer>,
     primitive_bind_groups: Vec<wgpu::BindGroup>,
+    primitive_bind_group_layout: wgpu::BindGroupLayout,
 
     render_settings_uniform_buffer: wgpu::Buffer,
     render_settings_bind_group: wgpu::BindGroup,
@@ -33,15 +37,7 @@ pub(crate) struct Renderer {
 }
 
 impl Renderer {
-    pub(crate) fn new(camera: &Camera, gpu: &Gpu, scene: &mut Scene, settings: &RenderSettings) -> Self {
-        let shader_module = gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("shader"),
-            source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
-        });
-
-        let loaded_scene = mesh::load("assets/dragon.glb");
-        *scene = loaded_scene;
-
+    pub(crate) fn new(camera: &Camera, gpu: &Gpu, settings: &RenderSettings) -> Self {
         let primitive_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("primitive-bind-group-layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -56,200 +52,28 @@ impl Renderer {
             }],
         });
 
-        let mut primitive_buffers = Vec::new();
-        let mut primitive_bind_groups = Vec::new();
-        for primitive in &scene.primitives {
-            let vertex_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("vertex-buffer"),
-                contents: bytemuck::cast_slice(&primitive.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+        let (grid_buffer, grid_bind_group) = build_grid(&gpu.device, &primitive_bind_group_layout);
+        let (render_settings_uniform_buffer, render_settings_bind_group_layout, render_settings_bind_group) =
+            build_render_settings(&gpu.device, settings);
+        let (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group) = build_camera(&gpu.device, camera);
 
-            let index_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("index-buffer"),
-                contents: bytemuck::cast_slice(&primitive.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+        let bind_group_layouts = &[
+            Some(&camera_bind_group_layout),
+            Some(&render_settings_bind_group_layout),
+            Some(&primitive_bind_group_layout),
+        ];
 
-            let num_indices = primitive.indices.len() as u32;
-
-            primitive_buffers.push(PrimitiveBuffer {
-                vertex_buffer,
-                index_buffer,
-                num_indices,
-            });
-
-            let primitive_uniform_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("primitive-buffer"),
-                contents: bytemuck::bytes_of(&primitive.uniform()),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-
-            let primitive_bind_group = gpu.device.create_bind_group(&BindGroupDescriptor {
-                label: Some("primitive-bind-group"),
-                layout: &primitive_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: primitive_uniform_buffer.as_entire_binding(),
-                }],
-            });
-
-            primitive_bind_groups.push(primitive_bind_group);
-        }
-
-        let render_settings_uniform_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("settings-buffer"),
-            contents: bytemuck::bytes_of(&settings.uniform()),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let render_settings_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("render-settings-bind-group-layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-        let render_settings_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("render-settings-bind-group"),
-            layout: &render_settings_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: render_settings_uniform_buffer.as_entire_binding(),
-            }],
-        });
-
-        let camera_uniform_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("camera-buffer"),
-            contents: bytemuck::bytes_of(&camera.uniform()),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let camera_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("camera-bind-group-layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-        let camera_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("camera-bind-group"),
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_uniform_buffer.as_entire_binding(),
-            }],
-        });
-
-        let pipeline_layout = gpu.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("pipeline-layout"),
-            bind_group_layouts: &[
-                Some(&camera_bind_group_layout),
-                Some(&render_settings_bind_group_layout),
-                Some(&primitive_bind_group_layout),
-            ],
-            immediate_size: 0,
-        });
-
-        let render_pipeline = gpu.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render-pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader_module,
-                entry_point: None,
-                compilation_options: Default::default(),
-                buffers: &[Vertex::layout()],
-            },
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                unclipped_depth: false,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Less),
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &shader_module,
-                entry_point: None,
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: TextureFormat::Rgba8UnormSrgb,
-                    blend: None,
-                    write_mask: Default::default(),
-                })],
-            }),
-            multiview_mask: None,
-            cache: None,
-        });
-
-        let wireframe_pipeline = gpu.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("wireframe-pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader_module,
-                entry_point: None,
-                compilation_options: Default::default(),
-                buffers: &[Vertex::layout()],
-            },
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,
-                unclipped_depth: false,
-                polygon_mode: wgpu::PolygonMode::Line,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Less),
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &shader_module,
-                entry_point: None,
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: TextureFormat::Rgba8UnormSrgb,
-                    blend: None,
-                    write_mask: Default::default(),
-                })],
-            }),
-            multiview_mask: None,
-            cache: None,
-        });
+        let (render_pipeline, wireframe_pipeline, line_pipeline) = build_pipelines(&gpu.device, bind_group_layouts);
 
         Self {
             render_pipeline,
             wireframe_pipeline,
-            primitive_buffers,
-            primitive_bind_groups,
+            line_pipeline,
+            grid_buffer,
+            grid_bind_group,
+            primitive_buffers: Vec::new(),
+            primitive_bind_groups: Vec::new(),
+            primitive_bind_group_layout,
             render_settings_uniform_buffer,
             render_settings_bind_group,
             camera_uniform_buffer,
@@ -299,12 +123,22 @@ impl Renderer {
                 multiview_mask: None,
             });
 
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+
+            if settings.grid {
+                render_pass.set_pipeline(&self.line_pipeline);
+                render_pass.set_bind_group(1, &self.grid_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.grid_buffer.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.grid_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..self.grid_buffer.num_indices, 0, 0..1);
+            }
+
             if settings.wireframe {
                 render_pass.set_pipeline(&self.wireframe_pipeline);
             } else {
                 render_pass.set_pipeline(&self.render_pipeline);
             }
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+
             render_pass.set_bind_group(1, &self.render_settings_bind_group, &[]);
 
             let invisible = scene.get_invisible_primitives();
@@ -322,6 +156,12 @@ impl Renderer {
         }
     }
 
+    pub(crate) fn load(&mut self, gpu: &Gpu, scene: &Scene) {
+        let (primitive_buffers, primitive_bind_groups) = build_primitives(&gpu.device, &self.primitive_bind_group_layout, scene);
+        self.primitive_buffers = primitive_buffers;
+        self.primitive_bind_groups = primitive_bind_groups;
+    }
+
     fn update_settings_uniform_buffer(&mut self, settings: &RenderSettings, gpu: &Gpu) {
         gpu.queue
             .write_buffer(&self.render_settings_uniform_buffer, 0, bytemuck::bytes_of(&settings.uniform()));
@@ -331,4 +171,314 @@ impl Renderer {
         gpu.queue
             .write_buffer(&self.camera_uniform_buffer, 0, bytemuck::bytes_of(&camera.uniform()));
     }
+}
+
+fn build_pipelines(
+    device: &wgpu::Device,
+    bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
+) -> (wgpu::RenderPipeline, wgpu::RenderPipeline, wgpu::RenderPipeline) {
+    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("shader"),
+        source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("render-pipeline-layout"),
+        bind_group_layouts,
+        immediate_size: 0,
+    });
+
+    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("render-pipeline"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader_module,
+            entry_point: None,
+            compilation_options: Default::default(),
+            buffers: &[Vertex::layout()],
+        },
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: None,
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: TextureFormat::Depth32Float,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &shader_module,
+            entry_point: None,
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: TextureFormat::Rgba8UnormSrgb,
+                blend: None,
+                write_mask: Default::default(),
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    });
+
+    let wireframe_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("wireframe-pipeline"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader_module,
+            entry_point: None,
+            compilation_options: Default::default(),
+            buffers: &[Vertex::layout()],
+        },
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: None,
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Line,
+            conservative: false,
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: TextureFormat::Depth32Float,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &shader_module,
+            entry_point: None,
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: TextureFormat::Rgba8UnormSrgb,
+                blend: None,
+                write_mask: Default::default(),
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    });
+
+    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("shader"),
+        source: ShaderSource::Wgsl(include_str!("../shaders/grid.wgsl").into()),
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("grid-pipeline-layout"),
+        bind_group_layouts: &[bind_group_layouts[0], bind_group_layouts[2]],
+        immediate_size: 0,
+    });
+
+    let grid_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("grid-pipeline"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader_module,
+            entry_point: None,
+            compilation_options: Default::default(),
+            buffers: &[Vertex::layout()],
+        },
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::LineList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: None,
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Line,
+            conservative: false,
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: TextureFormat::Depth32Float,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &shader_module,
+            entry_point: None,
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: TextureFormat::Rgba8UnormSrgb,
+                blend: None,
+                write_mask: Default::default(),
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    });
+
+    (render_pipeline, wireframe_pipeline, grid_pipeline)
+}
+
+fn build_grid(device: &wgpu::Device, primitive_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {
+    let grid_primitive = Primitive::grid(30.0, 16);
+
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("vertex-buffer"),
+        contents: bytemuck::cast_slice(&grid_primitive.vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("index-buffer"),
+        contents: bytemuck::cast_slice(&grid_primitive.indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
+    let num_indices = grid_primitive.indices.len() as u32;
+
+    let grid_buffer = PrimitiveBuffer {
+        vertex_buffer,
+        index_buffer,
+        num_indices,
+    };
+
+    let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("primitive-buffer"),
+        contents: bytemuck::bytes_of(&grid_primitive.uniform()),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+
+    let primitive_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("primitive-bind-group"),
+        layout: primitive_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: primitive_uniform_buffer.as_entire_binding(),
+        }],
+    });
+
+    (grid_buffer, primitive_bind_group)
+}
+
+fn build_primitives(
+    device: &wgpu::Device,
+    primitive_bind_group_layout: &wgpu::BindGroupLayout,
+    scene: &Scene,
+) -> (Vec<PrimitiveBuffer>, Vec<wgpu::BindGroup>) {
+    let mut primitive_buffers = Vec::new();
+    let mut primitive_bind_groups = Vec::new();
+
+    for primitive in &scene.primitives {
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("vertex-buffer"),
+            contents: bytemuck::cast_slice(&primitive.vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("index-buffer"),
+            contents: bytemuck::cast_slice(&primitive.indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let num_indices = primitive.indices.len() as u32;
+
+        primitive_buffers.push(PrimitiveBuffer {
+            vertex_buffer,
+            index_buffer,
+            num_indices,
+        });
+
+        let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("primitive-buffer"),
+            contents: bytemuck::bytes_of(&primitive.uniform()),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        let primitive_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("primitive-bind-group"),
+            layout: primitive_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: primitive_uniform_buffer.as_entire_binding(),
+            }],
+        });
+
+        primitive_bind_groups.push(primitive_bind_group);
+    }
+
+    (primitive_buffers, primitive_bind_groups)
+}
+
+fn build_render_settings(device: &wgpu::Device, settings: &RenderSettings) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
+    let render_settings_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("settings-buffer"),
+        contents: bytemuck::bytes_of(&settings.uniform()),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let render_settings_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("render-settings-bind-group-layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+
+    let render_settings_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("render-settings-bind-group"),
+        layout: &render_settings_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: render_settings_uniform_buffer.as_entire_binding(),
+        }],
+    });
+
+    (
+        render_settings_uniform_buffer,
+        render_settings_bind_group_layout,
+        render_settings_bind_group,
+    )
+}
+
+fn build_camera(device: &wgpu::Device, camera: &Camera) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
+    let camera_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("camera-buffer"),
+        contents: bytemuck::bytes_of(&camera.uniform()),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("camera-bind-group-layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+
+    let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("camera-bind-group"),
+        layout: &camera_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: camera_uniform_buffer.as_entire_binding(),
+        }],
+    });
+
+    (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group)
 }

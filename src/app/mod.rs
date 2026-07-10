@@ -5,12 +5,15 @@ mod stats;
 pub(crate) use input::*;
 pub(crate) use state::*;
 pub(crate) use stats::*;
+use std::collections::VecDeque;
 
 use crate::camera::{Camera, CameraController, CameraDescriptor};
-use crate::mesh::Scene;
+use crate::mesh::{Scene, load};
 use crate::renderer::{Gpu, RenderSettings, Renderer, Viewport};
+use crate::ui::editor::EditorCommand;
 use crate::ui::{Gui, editor};
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
+use std::thread;
 use std::time::Instant;
 use wgpu::CurrentSurfaceTexture;
 use winit::application::ApplicationHandler;
@@ -35,10 +38,17 @@ pub(crate) struct App {
 
     stats: FrameStats,
     last_frame_time: Option<Instant>,
+
+    editor_commands: VecDeque<EditorCommand>,
+
+    tx: mpsc::Sender<Scene>,
+    rx: mpsc::Receiver<Scene>,
 }
 
 impl Default for App {
     fn default() -> Self {
+        let (tx, rx) = mpsc::channel();
+
         Self {
             app_state: None,
             scene: Scene::default(),
@@ -48,6 +58,9 @@ impl Default for App {
             render_settings: RenderSettings::default(),
             stats: FrameStats::default(),
             last_frame_time: None,
+            editor_commands: VecDeque::new(),
+            tx,
+            rx,
         }
     }
 }
@@ -67,19 +80,14 @@ impl ApplicationHandler for App {
         let gpu = Gpu::new(window.clone());
         let mut gui = Gui::new(&window, &gpu.device, gpu.config.format);
 
+        let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
+
         let camera = Camera::new(&CameraDescriptor {
-            eye: glam::vec3(0.0, 0.0, 2.0),
-            yaw: 0.0,
-            pitch: 0.0,
-            up: glam::Vec3::Y,
-            aspect: gpu.config.width as f32 / gpu.config.height as f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
+            aspect: viewport.width as f32 / viewport.height as f32,
+            ..Default::default()
         });
 
-        let renderer = Renderer::new(&camera, &gpu, &mut self.scene, &self.render_settings);
-        let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
+        let renderer = Renderer::new(&camera, &gpu, &self.render_settings);
 
         self.app_state = Some(AppState::new(window, camera, gpu, renderer, gui, viewport));
     }
@@ -112,6 +120,15 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::RedrawRequested => {
+                while let Some(command) = self.editor_commands.pop_front() {
+                    handle(event_loop, app_state, self.viewport_rect, command, self.tx.clone());
+                }
+
+                while let Ok(scene) = self.rx.try_recv() {
+                    app_state.renderer.load(&app_state.gpu, &scene);
+                    self.scene = scene;
+                }
+
                 let now = Instant::now();
                 let dt = self.last_frame_time.map_or(0.0, |last| (now - last).as_secs_f32());
                 self.last_frame_time = Some(now);
@@ -150,7 +167,14 @@ impl ApplicationHandler for App {
                     &mut encoder,
                     &view,
                     |ui| {
-                        viewport_rect = editor::build(ui, app_state.viewport.texture_id, &mut self.scene, &mut self.render_settings, &self.stats);
+                        viewport_rect = editor::build(
+                            ui,
+                            app_state.viewport.texture_id,
+                            &mut self.scene,
+                            &mut self.render_settings,
+                            &self.stats,
+                            &mut self.editor_commands,
+                        );
                     },
                 );
 
@@ -226,6 +250,28 @@ impl ApplicationHandler for App {
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         if let Some(state) = self.app_state.as_ref() {
             state.window.request_redraw();
+        }
+    }
+}
+
+fn handle(event_loop: &ActiveEventLoop, app_state: &mut AppState, viewport_rect: egui::Rect, cmd: EditorCommand, tx: mpsc::Sender<Scene>) {
+    match cmd {
+        EditorCommand::LoadFile(path) => {
+            let path = path.to_string_lossy().to_string();
+
+            thread::spawn(move || {
+                let scene = load(path);
+                tx.send(scene).ok();
+            });
+        }
+        EditorCommand::ResetCamera => {
+            app_state.camera = Camera::new(&CameraDescriptor {
+                aspect: viewport_rect.width() / viewport_rect.height(),
+                ..Default::default()
+            });
+        }
+        EditorCommand::Quit => {
+            event_loop.exit();
         }
     }
 }
