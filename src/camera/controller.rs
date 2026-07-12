@@ -12,19 +12,23 @@ pub(crate) struct CameraDisplacement {
 pub(crate) struct CameraController {
     speed: f32,
     sensitivity: f32,
+    smoothing: f32,
+    smoothed_look: glam::Vec2,
 }
 
 impl Default for CameraController {
     fn default() -> Self {
         Self {
             speed: 6.0,
-            sensitivity: 0.004,
+            sensitivity: 0.002,
+            smoothing: 0.5,
+            smoothed_look: glam::Vec2::ZERO,
         }
     }
 }
 
 impl CameraController {
-    pub(crate) fn compute(&self, input_state: &mut InputState, dt: f32) -> CameraDisplacement {
+    pub(crate) fn compute(&mut self, input_state: &mut InputState, dt: f32) -> CameraDisplacement {
         let mut translation = glam::Vec3::ZERO;
 
         if input_state.is_key_pressed(KeyCode::KeyD) {
@@ -46,18 +50,23 @@ impl CameraController {
             translation -= glam::Vec3::Z;
         }
 
-        let mut mouse_pos_delta = input_state.take_mouse_pos_delta();
+        let mut raw_look = input_state.take_mouse_pos_delta();
         if !input_state.is_mouse_button_pressed(MouseButton::Right) {
-            mouse_pos_delta = glam::Vec2::ZERO;
+            raw_look = glam::Vec2::ZERO;
+            self.smoothed_look = glam::Vec2::ZERO;
         }
+
+        self.smoothed_look += raw_look;
+        let look = self.smoothed_look * self.smoothing;
+        self.smoothed_look -= look;
 
         let mouse_scroll_delta = input_state.take_mouse_scroll_delta();
 
         CameraDisplacement {
             translation: translation.normalize_or_zero() * self.speed * dt,
             fov: mouse_scroll_delta,
-            yaw: -mouse_pos_delta.x * self.sensitivity,
-            pitch: -mouse_pos_delta.y * self.sensitivity,
+            yaw: -look.x * self.sensitivity,
+            pitch: -look.y * self.sensitivity,
         }
     }
 }
