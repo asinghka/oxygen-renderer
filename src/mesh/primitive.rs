@@ -17,7 +17,8 @@ pub(crate) struct Primitive {
     pub(crate) indices: Vec<u32>,
     pub(crate) model: glam::Mat4,
     pub(crate) color: [f32; 4],
-    pub(crate) texture: Option<usize>,
+    pub(crate) albedo_texture: Option<usize>,
+    pub(crate) normal_texture: Option<usize>,
 }
 
 impl Primitive {
@@ -67,7 +68,8 @@ impl Primitive {
             indices,
             model: glam::Mat4::from_translation(-glam::Vec3::Y),
             color: [0.5, 0.5, 0.5, 1.0],
-            texture: None,
+            albedo_texture: None,
+            normal_texture: None,
         }
     }
 

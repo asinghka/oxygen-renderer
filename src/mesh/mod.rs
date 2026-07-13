@@ -111,13 +111,15 @@ fn visit(
                 .pbr_metallic_roughness()
                 .base_color_texture()
                 .map(|info| info.texture().source().index());
+            let normal_texture = primitive.material().normal_texture().map(|nt| nt.texture().source().index());
 
             primitives.push(Primitive {
                 vertices,
                 indices,
                 model,
                 color,
-                texture,
+                albedo_texture: texture,
+                normal_texture,
             })
         }
     }

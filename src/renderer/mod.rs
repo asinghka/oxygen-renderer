@@ -59,6 +59,12 @@ impl Renderer {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         view_dimension: wgpu::TextureViewDimension::D2,
@@ -67,9 +73,13 @@ impl Renderer {
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
-                    binding: 2,
+                    binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
                     count: None,
                 },
             ],
@@ -491,8 +501,13 @@ fn build_primitives(
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
-        let texture_view = primitive
-            .texture
+        let albedo_texture_view = primitive
+            .albedo_texture
+            .and_then(|index| texture_views[index].as_ref())
+            .unwrap_or(placeholder_view);
+
+        let normal_texture_view = primitive
+            .normal_texture
             .and_then(|index| texture_views[index].as_ref())
             .unwrap_or(placeholder_view);
 
@@ -506,11 +521,15 @@ fn build_primitives(
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(texture_view),
+                    resource: wgpu::BindingResource::Sampler(texture_sampler),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::Sampler(texture_sampler),
+                    resource: wgpu::BindingResource::TextureView(albedo_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(normal_texture_view),
                 },
             ],
         });

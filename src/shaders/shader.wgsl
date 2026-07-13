@@ -27,10 +27,13 @@ var<uniform> settings: RenderSettings;
 var<uniform> primitive: Primitive;
 
 @group(2) @binding(1)
-var tex_color: texture_2d<f32>;
+var tex_sampler: sampler;
 
 @group(2) @binding(2)
-var tex_sampler: sampler;
+var albedo_texture: texture_2d<f32>;
+
+@group(2) @binding(3)
+var normal_texture: texture_2d<f32>;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -71,7 +74,7 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let ambient = settings.ambient;
 
-    let albedo = textureSample(tex_color, tex_sampler, in.uv).rgb * primitive.color.rgb;
+    let albedo = textureSample(albedo_texture, tex_sampler, in.uv).rgb * primitive.color.rgb;
 
     let n_dot_l = dot(n, light_dir);
 
