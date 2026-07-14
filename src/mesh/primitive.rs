@@ -25,8 +25,21 @@ pub(crate) struct Primitive {
 
 impl Primitive {
     pub(crate) fn grid(size: f32, divisions: u32) -> Self {
-        let half = size / 2.0;
         let step = size / divisions as f32;
+        let offsets = (0..=divisions).map(|n| -size / 2.0 + n as f32 * step);
+
+        Self::grid_lines(size, offsets, [0.5, 0.5, 0.5])
+    }
+
+    pub(crate) fn subgrid(size: f32, divisions: u32) -> Self {
+        let step = size / divisions as f32;
+        let offsets = (0..divisions).map(|n| -size / 2.0 + (n as f32 + 0.5) * step);
+
+        Self::grid_lines(size, offsets, [0.2, 0.2, 0.2])
+    }
+
+    fn grid_lines(size: f32, offsets: impl Iterator<Item = f32>, color: [f32; 3]) -> Self {
+        let half = size / 2.0;
         let normal = [0.0, 1.0, 0.0];
 
         let mut vertices = Vec::new();
@@ -34,9 +47,7 @@ impl Primitive {
         let uv = [0.0; 2];
         let tangent = [1.0, 0.0, 0.0, 1.0];
 
-        for n in 0..=divisions {
-            let offset = -half + n as f32 * step;
-
+        for offset in offsets {
             let base = vertices.len() as u32;
             vertices.push(Vertex {
                 position: [-half, 0.0, offset],
@@ -74,7 +85,7 @@ impl Primitive {
             vertices,
             indices,
             model: glam::Mat4::from_translation(-glam::Vec3::Y),
-            color: [0.5, 0.5, 0.5],
+            color,
             albedo_texture: None,
             normal_texture: None,
             bump: 0.0,

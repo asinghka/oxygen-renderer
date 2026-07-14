@@ -12,7 +12,8 @@ pub(crate) struct RenderSettingsUniform {
     specular: u32,
     specular_strength: f32,
     specular_exponent: f32,
-    _pad: [f32; 3],
+    bump: f32,
+    _pad: [f32; 2],
 }
 
 pub(crate) struct RenderSettings {
@@ -21,6 +22,7 @@ pub(crate) struct RenderSettings {
     pub(crate) specular: bool,
     pub(crate) specular_strength: f32,
     pub(crate) shininess: f32,
+    pub(crate) bump: f32,
     pub(crate) background: [f32; 3],
     pub(crate) wireframe: bool,
     pub(crate) grid: bool,
@@ -34,6 +36,7 @@ impl Default for RenderSettings {
             specular: true,
             specular_strength: 0.7,
             shininess: 0.7,
+            bump: 1.0,
             background: [0.08; 3],
             wireframe: false,
             grid: true,
@@ -49,7 +52,8 @@ impl RenderSettings {
             specular: self.specular as u32,
             specular_strength: self.specular_strength,
             specular_exponent: self.shininess * 256.0,
-            _pad: [0.0; 3],
+            bump: self.bump,
+            _pad: [0.0; 2],
         }
     }
 }

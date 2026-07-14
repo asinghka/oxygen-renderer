@@ -4,6 +4,7 @@ struct RenderSettings {
     specular: u32,
     specular_strength: f32,
     specular_exponent: f32,
+    bump: f32,
 }
 
 struct Camera {
@@ -78,9 +79,11 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
     let b = cross(n, t) * in.tangent.w;
     let tbn = mat3x3<f32>(t, b, n);
 
+    var bump = primitive.bump * settings.bump;
+
     n = textureSample(normal_texel, tex_sampler, in.uv).xyz;
     n = 2.0 * n - 1.0;
-    n = vec3<f32>(primitive.bump, primitive.bump, 1.0) * n;
+    n = vec3<f32>(bump, bump, 1.0) * n;
     n = normalize(tbn * n);
 
     let light_dir = normalize(vec3<f32>(0.4, 0.8, 0.6));

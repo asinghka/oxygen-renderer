@@ -25,6 +25,8 @@ pub(crate) struct Renderer {
 
     grid_buffer: PrimitiveBuffer,
     grid_bind_group: wgpu::BindGroup,
+    subgrid_buffer: PrimitiveBuffer,
+    subgrid_bind_group: wgpu::BindGroup,
 
     primitive_buffers: Vec<PrimitiveBuffer>,
     primitive_bind_groups: Vec<wgpu::BindGroup>,
@@ -137,6 +139,8 @@ impl Renderer {
         let placeholder_view = placeholder_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let (grid_buffer, grid_bind_group) = build_grid(&gpu.device, &grid_bind_group_layout);
+        let (subgrid_buffer, subgrid_bind_group) = build_subgrid(&gpu.device, &grid_bind_group_layout);
+
         let (render_settings_uniform_buffer, render_settings_bind_group_layout, render_settings_bind_group) =
             build_render_settings(&gpu.device, settings);
         let (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group) = build_camera(&gpu.device, camera);
@@ -158,6 +162,8 @@ impl Renderer {
             line_pipeline,
             grid_buffer,
             grid_bind_group,
+            subgrid_buffer,
+            subgrid_bind_group,
             primitive_buffers: Vec::new(),
             primitive_bind_groups: Vec::new(),
             primitive_bind_group_layout,
@@ -217,10 +223,16 @@ impl Renderer {
 
             if settings.grid {
                 render_pass.set_pipeline(&self.line_pipeline);
+
                 render_pass.set_bind_group(1, &self.grid_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.grid_buffer.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(self.grid_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
                 render_pass.draw_indexed(0..self.grid_buffer.num_indices, 0, 0..1);
+
+                render_pass.set_bind_group(1, &self.subgrid_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.subgrid_buffer.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.subgrid_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..self.subgrid_buffer.num_indices, 0, 0..1);
             }
 
             if settings.wireframe {
@@ -426,13 +438,13 @@ fn build_grid(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLay
     let grid_primitive = Primitive::grid(30.0, 16);
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("vertex-buffer"),
+        label: Some("grid-vertex-buffer"),
         contents: bytemuck::cast_slice(&grid_primitive.vertices),
         usage: wgpu::BufferUsages::VERTEX,
     });
 
     let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("index-buffer"),
+        label: Some("grid-index-buffer"),
         contents: bytemuck::cast_slice(&grid_primitive.indices),
         usage: wgpu::BufferUsages::INDEX,
     });
@@ -446,7 +458,7 @@ fn build_grid(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLay
     };
 
     let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("primitive-buffer"),
+        label: Some("grid-primitive-buffer"),
         contents: bytemuck::bytes_of(&grid_primitive.uniform()),
         usage: wgpu::BufferUsages::UNIFORM,
     });
@@ -461,6 +473,47 @@ fn build_grid(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLay
     });
 
     (grid_buffer, grid_bind_group)
+}
+
+fn build_subgrid(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {
+    let grid_primitive = Primitive::subgrid(30.0, 16);
+
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("subgrid-vertex-buffer"),
+        contents: bytemuck::cast_slice(&grid_primitive.vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("subgrid-index-buffer"),
+        contents: bytemuck::cast_slice(&grid_primitive.indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
+    let num_indices = grid_primitive.indices.len() as u32;
+
+    let subgrid_buffer = PrimitiveBuffer {
+        vertex_buffer,
+        index_buffer,
+        num_indices,
+    };
+
+    let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("subgrid-primitive-buffer"),
+        contents: bytemuck::bytes_of(&grid_primitive.uniform()),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+
+    let subgrid_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("subgrid-bind-group"),
+        layout: grid_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: primitive_uniform_buffer.as_entire_binding(),
+        }],
+    });
+
+    (subgrid_buffer, subgrid_bind_group)
 }
 
 fn build_primitives(
