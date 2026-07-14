@@ -9,6 +9,7 @@ use gltf::buffer::Data;
 use gltf::image::Format;
 pub(crate) use primitive::*;
 pub(crate) use scene::*;
+use std::collections::HashSet;
 pub(crate) use vertex::*;
 
 pub(crate) fn load(path: String) -> Scene {
@@ -35,10 +36,24 @@ pub(crate) fn load(path: String) -> Scene {
         root_indices.push(root_index);
     }
 
+    let mut linear_images = HashSet::new();
+    for material in document.materials() {
+        if let Some(t) = material.normal_texture() {
+            linear_images.insert(t.texture().source().index());
+        }
+        if let Some(t) = material.occlusion_texture() {
+            linear_images.insert(t.texture().source().index());
+        }
+        if let Some(t) = material.pbr_metallic_roughness().metallic_roughness_texture() {
+            linear_images.insert(t.texture().source().index());
+        }
+    }
+
     let mut textures = Vec::with_capacity(images.len());
-    for image in images {
+    for (index, image) in images.into_iter().enumerate() {
         let width = image.width;
         let height = image.height;
+        let srgb = !linear_images.contains(&index);
 
         let texture = match image.format {
             Format::R8G8B8 => {
@@ -46,6 +61,7 @@ pub(crate) fn load(path: String) -> Scene {
                     pixels: expand_rgb_to_rgba(image.pixels),
                     width,
                     height,
+                    srgb,
                 })
             }
             Format::R8G8B8A8 => {
@@ -53,6 +69,7 @@ pub(crate) fn load(path: String) -> Scene {
                     pixels: image.pixels,
                     width,
                     height,
+                    srgb,
                 })
             }
             _ => None,
@@ -86,18 +103,27 @@ fn visit(
             scene_node.add_primitive(*primitive_index);
             *primitive_index += 1;
 
-            let mut vertices: Vec<Vertex> = Vec::new();
-            let mut indices: Vec<u32> = Vec::new();
+            let mut vertices = Vec::new();
+            let mut indices = Vec::new();
 
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
             let positions = reader.read_positions().expect("Failed to read positions");
             let normals = reader.read_normals().expect("Failed to read normals");
-            let uvs = reader.read_tex_coords(0).map(|tex_coords| tex_coords.into_f32().collect::<Vec<_>>());
-            let uvs = uvs.into_iter().flatten().chain(std::iter::repeat([0.0, 0.0]));
 
-            for ((position, normal), uv) in positions.zip(normals).zip(uvs) {
-                vertices.push(Vertex { position, normal, uv });
+            let uvs = reader.read_tex_coords(0).map(|tex_coords| tex_coords.into_f32().collect::<Vec<_>>());
+            let uvs = uvs.into_iter().flatten().chain(std::iter::repeat([0.0; 2]));
+
+            let tangents = reader.read_tangents().map(|t| t.collect::<Vec<_>>());
+            let tangents = tangents.into_iter().flatten().chain(std::iter::repeat([1.0, 0.0, 0.0, 1.0]));
+
+            for (((position, normal), uv), tangent) in positions.zip(normals).zip(uvs).zip(tangents) {
+                vertices.push(Vertex {
+                    position,
+                    normal,
+                    uv,
+                    tangent,
+                });
             }
 
             let read_indices = reader.read_indices().expect("Failed to read indices");
@@ -105,21 +131,25 @@ fn visit(
                 indices.push(i);
             }
 
-            let color = primitive.material().pbr_metallic_roughness().base_color_factor();
-            let texture = primitive
+            let [r, g, b, _] = primitive.material().pbr_metallic_roughness().base_color_factor();
+            let albedo_texture = primitive
                 .material()
                 .pbr_metallic_roughness()
                 .base_color_texture()
                 .map(|info| info.texture().source().index());
-            let normal_texture = primitive.material().normal_texture().map(|nt| nt.texture().source().index());
+
+            let normal_texture = primitive.material().normal_texture();
+            let bump = normal_texture.as_ref().map(|nt| nt.scale()).unwrap_or(0.0);
+            let normal_texture = normal_texture.as_ref().map(|nt| nt.texture().source().index());
 
             primitives.push(Primitive {
                 vertices,
                 indices,
                 model,
-                color,
-                albedo_texture: texture,
+                color: [r, g, b],
+                albedo_texture,
                 normal_texture,
+                bump,
             })
         }
     }

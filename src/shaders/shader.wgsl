@@ -14,7 +14,8 @@ struct Camera {
 struct Primitive {
     model: mat4x4<f32>,
     normal_model: mat4x4<f32>,
-    color: vec4<f32>,
+    color: vec3<f32>,
+    bump: f32,
 }
 
 @group(0) @binding(0)
@@ -30,15 +31,16 @@ var<uniform> primitive: Primitive;
 var tex_sampler: sampler;
 
 @group(2) @binding(2)
-var albedo_texture: texture_2d<f32>;
+var albedo_texel: texture_2d<f32>;
 
 @group(2) @binding(3)
-var normal_texture: texture_2d<f32>;
+var normal_texel: texture_2d<f32>;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
+    @location(3) tangent: vec4<f32>,
 }
 
 struct VertexOutput {
@@ -46,6 +48,7 @@ struct VertexOutput {
     @location(0) world_pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
+    @location(3) tangent: vec4<f32>,
 }
 
 @vertex
@@ -60,6 +63,7 @@ fn vertex_shader(in: VertexInput) -> VertexOutput {
     out.world_pos = world_pos.xyz;
 
     out.normal = (normal_model * vec4<f32>(in.normal, 0.0)).xyz;
+    out.tangent = vec4<f32>((model * vec4<f32>(in.tangent.xyz, 0.0)).xyz, in.tangent.w);
     out.clip_pos = camera.view_projection * world_pos;
     out.uv = in.uv;
 
@@ -68,13 +72,22 @@ fn vertex_shader(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
-    let n = normalize(in.normal);
+    var n = normalize(in.normal);
+
+    let t = normalize(in.tangent.xyz);
+    let b = cross(n, t) * in.tangent.w;
+    let tbn = mat3x3<f32>(t, b, n);
+
+    n = textureSample(normal_texel, tex_sampler, in.uv).xyz;
+    n = 2.0 * n - 1.0;
+    n = vec3<f32>(primitive.bump, primitive.bump, 1.0) * n;
+    n = normalize(tbn * n);
 
     let light_dir = normalize(vec3<f32>(0.4, 0.8, 0.6));
 
     let ambient = settings.ambient;
 
-    let albedo = textureSample(albedo_texture, tex_sampler, in.uv).rgb * primitive.color.rgb;
+    let albedo = textureSample(albedo_texel, tex_sampler, in.uv).rgb * primitive.color;
 
     let n_dot_l = dot(n, light_dir);
 

@@ -553,13 +553,19 @@ fn create_texture_views(device: &wgpu::Device, queue: &wgpu::Queue, scene: &Scen
                 depth_or_array_layers: 1,
             };
 
+            let format = if tex_data.srgb {
+                TextureFormat::Rgba8UnormSrgb
+            } else {
+                TextureFormat::Rgba8Unorm
+            };
+
             let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("base-color"),
+                label: Some("scene-texture"),
                 size,
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
-                format: TextureFormat::Rgba8UnormSrgb,
+                format,
                 usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                 view_formats: &[],
             });

@@ -9,16 +9,18 @@ const _: () = assert!(offset_of!(PrimitiveUniform, normal_model) == 64);
 pub(crate) struct PrimitiveUniform {
     model: [[f32; 4]; 4],
     normal_model: [[f32; 4]; 4],
-    color: [f32; 4],
+    color: [f32; 3],
+    bump: f32,
 }
 
 pub(crate) struct Primitive {
     pub(crate) vertices: Vec<Vertex>,
     pub(crate) indices: Vec<u32>,
     pub(crate) model: glam::Mat4,
-    pub(crate) color: [f32; 4],
+    pub(crate) color: [f32; 3],
     pub(crate) albedo_texture: Option<usize>,
     pub(crate) normal_texture: Option<usize>,
+    pub(crate) bump: f32,
 }
 
 impl Primitive {
@@ -29,7 +31,8 @@ impl Primitive {
 
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
-        let uv = [0.0, 0.0];
+        let uv = [0.0; 2];
+        let tangent = [1.0, 0.0, 0.0, 1.0];
 
         for n in 0..=divisions {
             let offset = -half + n as f32 * step;
@@ -39,11 +42,13 @@ impl Primitive {
                 position: [-half, 0.0, offset],
                 normal,
                 uv,
+                tangent,
             });
             vertices.push(Vertex {
                 position: [half, 0.0, offset],
                 normal,
                 uv,
+                tangent,
             });
             indices.push(base);
             indices.push(base + 1);
@@ -53,11 +58,13 @@ impl Primitive {
                 position: [offset, 0.0, -half],
                 normal,
                 uv,
+                tangent,
             });
             vertices.push(Vertex {
                 position: [offset, 0.0, half],
                 normal,
                 uv,
+                tangent,
             });
             indices.push(base);
             indices.push(base + 1);
@@ -67,9 +74,10 @@ impl Primitive {
             vertices,
             indices,
             model: glam::Mat4::from_translation(-glam::Vec3::Y),
-            color: [0.5, 0.5, 0.5, 1.0],
+            color: [0.5, 0.5, 0.5],
             albedo_texture: None,
             normal_texture: None,
+            bump: 0.0,
         }
     }
 
@@ -78,6 +86,7 @@ impl Primitive {
             model: self.model.to_cols_array_2d(),
             normal_model: self.model.inverse().transpose().to_cols_array_2d(),
             color: self.color,
+            bump: self.bump,
         }
     }
 }
