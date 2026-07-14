@@ -23,6 +23,9 @@ use winit::window::{CursorGrabMode, Window, WindowId};
 
 const APP_NAME: &str = "Oxygen";
 
+const SCROLL_PIXELS_PER_LINE: f32 = 50.0;
+const PINCH_LINES_PER_MAGNIFICATION: f32 = 40.0;
+
 pub(crate) struct App {
     app_state: Option<AppState>,
 
@@ -116,6 +119,12 @@ impl ApplicationHandler for App {
                     app_state.window.set_cursor_visible(true);
                     let _ = app_state.window.set_cursor_grab(CursorGrabMode::None);
                     self.input_state.mouse_release(button);
+                }
+            }
+            WindowEvent::PinchGesture { delta, .. } => {
+                let over_viewport = app_state.gui.pointer_pos().is_some_and(|p| self.viewport_rect.contains(p));
+                if over_viewport && delta.is_finite() {
+                    self.input_state.add_mouse_scroll_delta(delta as f32 * PINCH_LINES_PER_MAGNIFICATION);
                 }
             }
             WindowEvent::RedrawRequested => {
@@ -231,13 +240,15 @@ impl ApplicationHandler for App {
             DeviceEvent::MouseMotion { delta } => {
                 self.input_state.add_mouse_pos_delta(delta.0 as f32, delta.1 as f32);
             }
-            DeviceEvent::MouseWheel {
-                delta: MouseScrollDelta::LineDelta(_, y),
-            } => {
+            DeviceEvent::MouseWheel { delta } => {
                 if let Some(app_state) = &mut self.app_state {
                     let over_viewport = app_state.gui.pointer_pos().is_some_and(|p| self.viewport_rect.contains(p));
                     if over_viewport {
-                        self.input_state.add_mouse_scroll_delta(y);
+                        let lines = match delta {
+                            MouseScrollDelta::LineDelta(_, y) => y,
+                            MouseScrollDelta::PixelDelta(pos) => pos.y as f32 / SCROLL_PIXELS_PER_LINE,
+                        };
+                        self.input_state.add_mouse_scroll_delta(lines);
                     }
                 }
             }
