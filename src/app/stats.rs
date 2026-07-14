@@ -1,4 +1,4 @@
-use crate::mesh::Scene;
+use crate::scene::Scene;
 
 const REFRESH_INTERVAL: f32 = 0.25;
 

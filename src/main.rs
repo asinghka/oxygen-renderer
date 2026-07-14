@@ -1,7 +1,7 @@
 mod app;
 mod camera;
-mod mesh;
 mod renderer;
+mod scene;
 mod ui;
 
 use crate::app::App;

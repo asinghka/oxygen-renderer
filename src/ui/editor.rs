@@ -1,6 +1,6 @@
 use crate::app::FrameStats;
-use crate::mesh::{Scene, SceneNode};
 use crate::renderer::RenderSettings;
+use crate::scene::{Scene, SceneNode};
 use egui::collapsing_header::CollapsingState;
 use egui::load::SizedTexture;
 use egui::{Align, Button, CentralPanel, CollapsingHeader, Frame, Layout, Margin, MenuBar, Panel, ScrollArea, Slider, Widget};

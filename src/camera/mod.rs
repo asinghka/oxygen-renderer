@@ -2,8 +2,8 @@ mod controller;
 mod uniform;
 
 pub(crate) use controller::*;
+pub(crate) use uniform::*;
 
-use crate::camera::uniform::CameraUniform;
 use glam::camera::rh::{proj::directx, view};
 
 pub(crate) struct CameraDescriptor {

@@ -1,4 +1,4 @@
-use crate::mesh::Vertex;
+use crate::scene::Vertex;
 use std::mem::offset_of;
 
 const _: () = assert!(size_of::<PrimitiveUniform>() == 144);

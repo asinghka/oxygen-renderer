@@ -1,5 +1,13 @@
-use crate::mesh::Primitive;
-use crate::mesh::texture::TextureData;
+mod load;
+mod primitive;
+mod texture;
+mod vertex;
+
+pub(crate) use load::*;
+pub(crate) use primitive::*;
+pub(crate) use texture::*;
+pub(crate) use vertex::*;
+
 use std::collections::HashSet;
 
 #[derive(Debug)]

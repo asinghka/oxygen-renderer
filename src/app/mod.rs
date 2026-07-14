@@ -8,10 +8,9 @@ pub(crate) use stats::*;
 use std::collections::VecDeque;
 
 use crate::camera::{Camera, CameraController, CameraDescriptor};
-use crate::mesh::{Scene, load};
 use crate::renderer::{Gpu, RenderSettings, Renderer, Viewport};
-use crate::ui::editor::EditorCommand;
-use crate::ui::{Gui, editor};
+use crate::scene::{Scene, load};
+use crate::ui::{EditorCommand, Gui, editor};
 use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Instant;

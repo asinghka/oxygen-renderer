@@ -1,16 +1,8 @@
-mod primitive;
-mod scene;
-mod texture;
-mod vertex;
-
-use crate::mesh::texture::TextureData;
+use crate::scene::{Primitive, Scene, SceneNode, TextureData, Vertex};
 use gltf::Node;
 use gltf::buffer::Data;
 use gltf::image::Format;
-pub(crate) use primitive::*;
-pub(crate) use scene::*;
 use std::collections::HashSet;
-pub(crate) use vertex::*;
 
 pub(crate) fn load(path: String) -> Scene {
     let (document, buffers, images) = gltf::import(path).expect("Failed to load glTF file");

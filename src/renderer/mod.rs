@@ -7,7 +7,7 @@ pub(crate) use settings::*;
 pub(crate) use viewport::*;
 
 use crate::camera::Camera;
-use crate::mesh::{Primitive, Scene, Vertex};
+use crate::scene::{Primitive, Scene, Vertex};
 use wgpu::util::DeviceExt;
 use wgpu::wgt::{SamplerDescriptor, TextureDataOrder};
 use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TexelCopyBufferLayout, TextureDimension, TextureFormat, TextureUsages};
