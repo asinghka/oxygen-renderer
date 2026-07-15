@@ -1,10 +1,10 @@
-use crate::scene::{Primitive, Scene, SceneNode, TextureData, Vertex};
+use crate::scene::{Model, ModelNode, Primitive, TextureData, Vertex};
 use gltf::Node;
 use gltf::buffer::Data;
 use gltf::image::Format;
 use std::collections::HashSet;
 
-pub(crate) fn load(path: String) -> Scene {
+pub(crate) fn load(path: String) -> Model {
     let (document, buffers, images) = gltf::import(path).expect("Failed to load glTF file");
 
     let mut scene_nodes = Vec::with_capacity(document.nodes().count());
@@ -70,7 +70,7 @@ pub(crate) fn load(path: String) -> Scene {
         textures.push(texture);
     }
 
-    Scene {
+    Model {
         scene_nodes,
         root_indices,
         primitives,
@@ -82,11 +82,11 @@ fn visit(
     node: Node,
     buffers: &Vec<Data>,
     parent_world_matrix: glam::Mat4,
-    scene_nodes: &mut Vec<SceneNode>,
+    scene_nodes: &mut Vec<ModelNode>,
     primitives: &mut Vec<Primitive>,
     primitive_index: &mut usize,
 ) -> usize {
-    let mut scene_node = SceneNode::new(node.name().map(|s| s.to_string()));
+    let mut scene_node = ModelNode::new(node.name().map(|s| s.to_string()));
 
     let model = parent_world_matrix * glam::Mat4::from_cols_array_2d(&node.transform().matrix());
 

@@ -7,7 +7,7 @@ pub(crate) use settings::*;
 pub(crate) use viewport::*;
 
 use crate::camera::Camera;
-use crate::scene::{Primitive, Scene, Vertex};
+use crate::scene::{Model, Primitive, Vertex};
 use wgpu::util::DeviceExt;
 use wgpu::wgt::{SamplerDescriptor, TextureDataOrder};
 use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TexelCopyBufferLayout, TextureDimension, TextureFormat, TextureUsages};
@@ -180,7 +180,7 @@ impl Renderer {
     pub(crate) fn render(
         &mut self,
         camera: &mut Camera,
-        scene: &Scene,
+        scene: &Model,
         gpu: &Gpu,
         encoder: &mut wgpu::CommandEncoder,
         viewport: &Viewport,
@@ -258,7 +258,7 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn load(&mut self, gpu: &Gpu, scene: &Scene) {
+    pub(crate) fn load(&mut self, gpu: &Gpu, scene: &Model) {
         self.texture_views = create_texture_views(&gpu.device, &gpu.queue, scene);
 
         let (primitive_buffers, primitive_bind_groups) = build_primitives(
@@ -522,7 +522,7 @@ fn build_primitives(
     texture_views: &[Option<wgpu::TextureView>],
     texture_sampler: &wgpu::Sampler,
     placeholder_view: &wgpu::TextureView,
-    scene: &Scene,
+    scene: &Model,
 ) -> (Vec<PrimitiveBuffer>, Vec<wgpu::BindGroup>) {
     let mut primitive_buffers = Vec::new();
     let mut primitive_bind_groups = Vec::new();
@@ -593,7 +593,7 @@ fn build_primitives(
     (primitive_buffers, primitive_bind_groups)
 }
 
-fn create_texture_views(device: &wgpu::Device, queue: &wgpu::Queue, scene: &Scene) -> Vec<Option<wgpu::TextureView>> {
+fn create_texture_views(device: &wgpu::Device, queue: &wgpu::Queue, scene: &Model) -> Vec<Option<wgpu::TextureView>> {
     scene
         .textures
         .iter()

@@ -1,6 +1,6 @@
 use crate::app::FrameStats;
 use crate::renderer::RenderSettings;
-use crate::scene::{Scene, SceneNode};
+use crate::scene::{Model, ModelNode};
 use egui::collapsing_header::CollapsingState;
 use egui::load::SizedTexture;
 use egui::{Align, Button, CentralPanel, CollapsingHeader, Frame, Layout, Margin, MenuBar, Panel, ScrollArea, Slider, Widget};
@@ -17,7 +17,7 @@ pub(crate) enum EditorCommand {
 pub(crate) fn build(
     ui: &mut egui::Ui,
     texture_id: egui::TextureId,
-    scene: &mut Scene,
+    scene: &mut Model,
     settings: &mut RenderSettings,
     stats: &FrameStats,
     editor_commands: &mut VecDeque<EditorCommand>,
@@ -175,7 +175,7 @@ pub(crate) fn build(
         .inner
 }
 
-fn node_tree(ui: &mut egui::Ui, nodes: &mut [SceneNode], index: usize) {
+fn node_tree(ui: &mut egui::Ui, nodes: &mut [ModelNode], index: usize) {
     let children = nodes[index].children.clone();
 
     if children.is_empty() {
@@ -196,7 +196,7 @@ fn node_tree(ui: &mut egui::Ui, nodes: &mut [SceneNode], index: usize) {
     }
 }
 
-fn visibility_row(ui: &mut egui::Ui, node: &mut SceneNode) {
+fn visibility_row(ui: &mut egui::Ui, node: &mut ModelNode) {
     ui.visuals_mut().widgets.hovered.expansion = 0.0;
     ui.visuals_mut().widgets.active.expansion = 0.0;
 

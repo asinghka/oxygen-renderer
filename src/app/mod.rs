@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 
 use crate::camera::{Camera, CameraController, CameraDescriptor};
 use crate::renderer::{Gpu, RenderSettings, Renderer, Viewport};
-use crate::scene::{Scene, load};
+use crate::scene::{Light, Model, load};
 use crate::ui::{EditorCommand, Gui, editor};
 use std::sync::{Arc, mpsc};
 use std::thread;
@@ -29,7 +29,8 @@ const PINCH_LINES_PER_MAGNIFICATION: f32 = 40.0;
 pub(crate) struct App {
     app_state: Option<AppState>,
 
-    scene: Scene,
+    scene: Model,
+    light: Light,
 
     camera_controller: CameraController,
     input_state: InputState,
@@ -43,8 +44,8 @@ pub(crate) struct App {
 
     editor_commands: VecDeque<EditorCommand>,
 
-    tx: mpsc::Sender<Scene>,
-    rx: mpsc::Receiver<Scene>,
+    tx: mpsc::Sender<Model>,
+    rx: mpsc::Receiver<Model>,
 }
 
 impl Default for App {
@@ -53,7 +54,8 @@ impl Default for App {
 
         Self {
             app_state: None,
-            scene: Scene::default(),
+            scene: Model::default(),
+            light: Light::default(),
             camera_controller: CameraController::default(),
             input_state: InputState::default(),
             viewport_rect: egui::Rect::NOTHING,
@@ -264,7 +266,7 @@ impl ApplicationHandler for App {
     }
 }
 
-fn handle(event_loop: &ActiveEventLoop, app_state: &mut AppState, viewport_rect: egui::Rect, cmd: EditorCommand, tx: mpsc::Sender<Scene>) {
+fn handle(event_loop: &ActiveEventLoop, app_state: &mut AppState, viewport_rect: egui::Rect, cmd: EditorCommand, tx: mpsc::Sender<Model>) {
     match cmd {
         EditorCommand::LoadFile(path) => {
             let path = path.to_string_lossy().to_string();

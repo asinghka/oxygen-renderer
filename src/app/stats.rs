@@ -1,4 +1,4 @@
-use crate::scene::Scene;
+use crate::scene::Model;
 
 const REFRESH_INTERVAL: f32 = 0.25;
 
@@ -33,7 +33,7 @@ impl FrameStats {
         }
     }
 
-    pub(crate) fn update(&mut self, scene: &Scene) {
+    pub(crate) fn update(&mut self, scene: &Model) {
         let (vertices, indices) = scene.get_visible_primitive_stats();
 
         self.vertices = vertices;
