@@ -71,7 +71,7 @@ pub(crate) fn load(path: String) -> Model {
     }
 
     Model {
-        scene_nodes,
+        model_nodes: scene_nodes,
         root_indices,
         primitives,
         textures,

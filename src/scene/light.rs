@@ -2,12 +2,13 @@
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct LightUniform {
     direction: [f32; 3],
+    _pad: f32,
 }
 
 #[derive(Default)]
 pub(crate) struct Light {
-    azimuth: f32,
-    elevation: f32,
+    pub(crate) azimuth: f32,
+    pub(crate) elevation: f32,
 }
 
 impl Light {
@@ -18,6 +19,6 @@ impl Light {
             -self.azimuth.cos() * self.elevation.cos(),
         ];
 
-        LightUniform { direction }
+        LightUniform { direction, _pad: 0.0 }
     }
 }

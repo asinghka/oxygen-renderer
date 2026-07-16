@@ -82,7 +82,7 @@ impl ApplicationHandler for App {
         let gpu = Gpu::new(window.clone());
         let mut gui = Gui::new(&window, &gpu.device, gpu.config.format);
         let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
-        let renderer = Renderer::new(&self.scene.camera, &gpu, &self.render_settings);
+        let renderer = Renderer::new(&self.scene.camera, &self.scene.light, &gpu, &self.render_settings);
 
         self.scene.camera.update_aspect_ratio(viewport.width as f32, viewport.height as f32);
 
@@ -153,14 +153,9 @@ impl ApplicationHandler for App {
 
                 let mut encoder = app_state.gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-                app_state.renderer.render(
-                    &mut self.scene.camera,
-                    &self.scene.model,
-                    &app_state.gpu,
-                    &mut encoder,
-                    &app_state.viewport,
-                    &mut self.render_settings,
-                );
+                app_state
+                    .renderer
+                    .render(&self.scene, &app_state.gpu, &mut encoder, &app_state.viewport, &mut self.render_settings);
 
                 let mut viewport_rect = egui::Rect::NOTHING;
                 app_state.gui.render(
@@ -174,6 +169,7 @@ impl ApplicationHandler for App {
                             ui,
                             app_state.viewport.texture_id,
                             &mut self.scene.model,
+                            &mut self.scene.light,
                             &mut self.render_settings,
                             &self.stats,
                             &mut self.editor_commands,
@@ -265,8 +261,8 @@ fn handle(event_loop: &ActiveEventLoop, camera: &mut Camera, viewport_rect: egui
             let path = path.to_string_lossy().to_string();
 
             thread::spawn(move || {
-                let scene = load(path);
-                tx.send(scene).ok();
+                let model = load(path);
+                tx.send(model).ok();
             });
         }
         EditorCommand::ResetCamera => {

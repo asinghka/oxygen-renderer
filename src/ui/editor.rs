@@ -1,6 +1,6 @@
 use crate::app::FrameStats;
 use crate::renderer::RenderSettings;
-use crate::scene::{Model, ModelNode};
+use crate::scene::{Light, Model, ModelNode};
 use egui::collapsing_header::CollapsingState;
 use egui::load::SizedTexture;
 use egui::{Align, Button, CentralPanel, CollapsingHeader, Frame, Layout, Margin, MenuBar, Panel, ScrollArea, Slider, Widget};
@@ -17,7 +17,8 @@ pub(crate) enum EditorCommand {
 pub(crate) fn build(
     ui: &mut egui::Ui,
     texture_id: egui::TextureId,
-    scene: &mut Model,
+    model: &mut Model,
+    light: &mut Light,
     settings: &mut RenderSettings,
     stats: &FrameStats,
     editor_commands: &mut VecDeque<EditorCommand>,
@@ -30,7 +31,7 @@ pub(crate) fn build(
 
                 ui.menu_button("File", |ui| {
                     if ui.button("Load file...").clicked() {
-                        if let Some(path) = rfd::FileDialog::new().add_filter("scene", &["glb"]).pick_file() {
+                        if let Some(path) = rfd::FileDialog::new().add_filter("model", &["glb"]).pick_file() {
                             editor_commands.push_back(EditorCommand::LoadFile(path));
                         }
                     }
@@ -73,7 +74,7 @@ pub(crate) fn build(
                         ui.strong("Scene Tree");
 
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            let at_least_one_visible = scene.at_least_one_visible();
+                            let at_least_one_visible = model.at_least_one_visible();
                             let icon = if at_least_one_visible {
                                 &re_ui::icons::VISIBLE
                             } else {
@@ -84,7 +85,7 @@ pub(crate) fn build(
                             let response = Button::image(image).image_tint_follows_text_color(true).small().ui(ui);
 
                             if response.clicked() {
-                                scene.set_all_visible(!at_least_one_visible)
+                                model.set_all_visible(!at_least_one_visible)
                             }
                         })
                     });
@@ -94,8 +95,8 @@ pub(crate) fn build(
                 ui.take_available_space();
                 Frame::default().inner_margin(ui.tokens().view_padding()).show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 6.0;
-                    for &root in &scene.root_indices {
-                        node_tree(ui, &mut scene.scene_nodes, root);
+                    for &root in &model.root_indices {
+                        node_tree(ui, &mut model.model_nodes, root);
                     }
                 });
             });
@@ -165,6 +166,20 @@ pub(crate) fn build(
 
                         ui.label("Bump strength");
                         Slider::new(&mut settings.bump, 0.0..=5.0).ui(ui);
+
+                        ui.add_space(12.0);
+
+                        ui.label("Light Azimuth");
+                        Slider::new(&mut light.azimuth, 0.0..=std::f32::consts::TAU)
+                            .custom_formatter(degrees_formatter)
+                            .custom_parser(degrees_parser)
+                            .ui(ui);
+
+                        ui.label("Light Elevation");
+                        Slider::new(&mut light.elevation, -std::f32::consts::FRAC_PI_2..=std::f32::consts::FRAC_PI_2)
+                            .custom_formatter(degrees_formatter)
+                            .custom_parser(degrees_parser)
+                            .ui(ui);
                     });
                 });
         });
@@ -173,6 +188,14 @@ pub(crate) fn build(
         .frame(Frame::NONE)
         .show(ui, |ui| ui.image(SizedTexture::new(texture_id, ui.available_size())).rect)
         .inner
+}
+
+fn degrees_formatter(radians: f64, _decimals: std::ops::RangeInclusive<usize>) -> String {
+    format!("{:.0}°", radians.to_degrees())
+}
+
+fn degrees_parser(text: &str) -> Option<f64> {
+    text.trim().trim_end_matches('°').trim().parse::<f64>().ok().map(f64::to_radians)
 }
 
 fn node_tree(ui: &mut egui::Ui, nodes: &mut [ModelNode], index: usize) {

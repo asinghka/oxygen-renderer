@@ -31,7 +31,7 @@ impl ModelNode {
 
 #[derive(Default)]
 pub(crate) struct Model {
-    pub(crate) scene_nodes: Vec<ModelNode>,
+    pub(crate) model_nodes: Vec<ModelNode>,
     pub(crate) primitives: Vec<Primitive>,
     pub(crate) root_indices: Vec<usize>,
     pub(crate) textures: Vec<Option<TextureData>>,
@@ -39,7 +39,7 @@ pub(crate) struct Model {
 
 impl Model {
     pub(crate) fn at_least_one_visible(&self) -> bool {
-        for node in &self.scene_nodes {
+        for node in &self.model_nodes {
             if let Some(true) = node.visible {
                 return true;
             }
@@ -49,7 +49,7 @@ impl Model {
     }
 
     pub(crate) fn set_all_visible(&mut self, visible: bool) {
-        for node in &mut self.scene_nodes {
+        for node in &mut self.model_nodes {
             if node.visible.is_some() {
                 node.visible = Some(visible);
             }
@@ -59,7 +59,7 @@ impl Model {
     pub(crate) fn get_invisible_primitives(&self) -> HashSet<usize> {
         let mut invisible = HashSet::new();
 
-        for node in &self.scene_nodes {
+        for node in &self.model_nodes {
             if let Some(false) = node.visible {
                 for primitive_index in &node.primitives {
                     invisible.insert(*primitive_index);
@@ -74,7 +74,7 @@ impl Model {
         let mut num_vertices = 0;
         let mut num_indices = 0;
 
-        for node in &self.scene_nodes {
+        for node in &self.model_nodes {
             if Some(true) != node.visible {
                 continue;
             }

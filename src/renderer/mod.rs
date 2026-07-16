@@ -7,7 +7,7 @@ pub(crate) use settings::*;
 pub(crate) use viewport::*;
 
 use crate::camera::Camera;
-use crate::scene::{Model, Primitive, Vertex};
+use crate::scene::{Light, Model, Primitive, Scene, Vertex};
 use wgpu::util::DeviceExt;
 use wgpu::wgt::{SamplerDescriptor, TextureDataOrder};
 use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TexelCopyBufferLayout, TextureDimension, TextureFormat, TextureUsages};
@@ -32,11 +32,14 @@ pub(crate) struct Renderer {
     primitive_bind_groups: Vec<wgpu::BindGroup>,
     primitive_bind_group_layout: wgpu::BindGroupLayout,
 
-    render_settings_uniform_buffer: wgpu::Buffer,
-    render_settings_bind_group: wgpu::BindGroup,
+    light_uniform_buffer: wgpu::Buffer,
+    light_bind_group: wgpu::BindGroup,
 
     camera_uniform_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+
+    render_settings_uniform_buffer: wgpu::Buffer,
+    render_settings_bind_group: wgpu::BindGroup,
 
     texture_sampler: wgpu::Sampler,
     texture_views: Vec<Option<wgpu::TextureView>>,
@@ -44,7 +47,7 @@ pub(crate) struct Renderer {
 }
 
 impl Renderer {
-    pub(crate) fn new(camera: &Camera, gpu: &Gpu, settings: &RenderSettings) -> Self {
+    pub(crate) fn new(camera: &Camera, light: &Light, gpu: &Gpu, settings: &RenderSettings) -> Self {
         let primitive_bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("primitive-bind-group-layout"),
             entries: &[
@@ -144,17 +147,18 @@ impl Renderer {
         let (render_settings_uniform_buffer, render_settings_bind_group_layout, render_settings_bind_group) =
             build_render_settings(&gpu.device, settings);
         let (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group) = build_camera(&gpu.device, camera);
+        let (light_uniform_buffer, light_bind_group_layout, light_bind_group) = build_light(&gpu.device, light);
 
-        let primitive_bind_group_layouts = &[
+        let bind_group_layouts = &[
             Some(&camera_bind_group_layout),
             Some(&render_settings_bind_group_layout),
             Some(&primitive_bind_group_layout),
+            Some(&light_bind_group_layout),
         ];
 
         let grid_bind_group_layouts = &[Some(&camera_bind_group_layout), Some(&grid_bind_group_layout)];
 
-        let (render_pipeline, wireframe_pipeline, line_pipeline) =
-            build_pipelines(&gpu.device, primitive_bind_group_layouts, grid_bind_group_layouts);
+        let (render_pipeline, wireframe_pipeline, line_pipeline) = build_pipelines(&gpu.device, bind_group_layouts, grid_bind_group_layouts);
 
         Self {
             render_pipeline,
@@ -167,10 +171,12 @@ impl Renderer {
             primitive_buffers: Vec::new(),
             primitive_bind_groups: Vec::new(),
             primitive_bind_group_layout,
-            render_settings_uniform_buffer,
-            render_settings_bind_group,
+            light_uniform_buffer,
+            light_bind_group,
             camera_uniform_buffer,
             camera_bind_group,
+            render_settings_uniform_buffer,
+            render_settings_bind_group,
             texture_sampler,
             texture_views: Vec::new(),
             placeholder_view,
@@ -179,82 +185,82 @@ impl Renderer {
 
     pub(crate) fn render(
         &mut self,
-        camera: &mut Camera,
-        scene: &Model,
+        scene: &Scene,
         gpu: &Gpu,
         encoder: &mut wgpu::CommandEncoder,
         viewport: &Viewport,
         settings: &mut RenderSettings,
     ) {
         self.update_settings_uniform_buffer(settings, gpu);
-        self.update_camera_uniform_buffer(camera, gpu);
+        self.update_camera_uniform_buffer(&scene.camera, gpu);
+        self.update_light_uniform_buffer(&scene.light, gpu);
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("render-pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &viewport.texture_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color {
-                            r: settings.background[0] as f64,
-                            g: settings.background[1] as f64,
-                            b: settings.background[2] as f64,
-                            a: 1.0,
-                        }),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &viewport.depth_texture_view,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.0),
-                        store: StoreOp::Discard,
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("render-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &viewport.texture_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color {
+                        r: settings.background[0] as f64,
+                        g: settings.background[1] as f64,
+                        b: settings.background[2] as f64,
+                        a: 1.0,
                     }),
-                    stencil_ops: None,
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &viewport.depth_texture_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0),
+                    store: StoreOp::Discard,
                 }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
 
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+        render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
 
-            if settings.grid {
-                render_pass.set_pipeline(&self.line_pipeline);
+        if settings.grid {
+            render_pass.set_pipeline(&self.line_pipeline);
 
-                render_pass.set_bind_group(1, &self.grid_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, self.grid_buffer.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.grid_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..self.grid_buffer.num_indices, 0, 0..1);
+            render_pass.set_bind_group(1, &self.grid_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.grid_buffer.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.grid_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..self.grid_buffer.num_indices, 0, 0..1);
 
-                render_pass.set_bind_group(1, &self.subgrid_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, self.subgrid_buffer.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.subgrid_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..self.subgrid_buffer.num_indices, 0, 0..1);
+            render_pass.set_bind_group(1, &self.subgrid_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.subgrid_buffer.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.subgrid_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..self.subgrid_buffer.num_indices, 0, 0..1);
+        }
+
+        if settings.wireframe {
+            render_pass.set_pipeline(&self.wireframe_pipeline);
+        } else {
+            render_pass.set_pipeline(&self.render_pipeline);
+        }
+
+        render_pass.set_bind_group(1, &self.render_settings_bind_group, &[]);
+
+        let invisible = &scene.model.get_invisible_primitives();
+
+        for (i, (primitive_buffer, primitive_bind_group)) in self.primitive_buffers.iter().zip(self.primitive_bind_groups.iter()).enumerate() {
+            if invisible.contains(&i) {
+                continue;
             }
 
-            if settings.wireframe {
-                render_pass.set_pipeline(&self.wireframe_pipeline);
-            } else {
-                render_pass.set_pipeline(&self.render_pipeline);
-            }
+            render_pass.set_bind_group(2, primitive_bind_group, &[]);
+            render_pass.set_bind_group(3, &self.light_bind_group, &[]);
 
-            render_pass.set_bind_group(1, &self.render_settings_bind_group, &[]);
-
-            let invisible = scene.get_invisible_primitives();
-
-            for (i, (primitive_buffer, primitive_bind_group)) in self.primitive_buffers.iter().zip(self.primitive_bind_groups.iter()).enumerate() {
-                if invisible.contains(&i) {
-                    continue;
-                }
-
-                render_pass.set_bind_group(2, primitive_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
-            }
+            render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
         }
     }
 
@@ -282,11 +288,16 @@ impl Renderer {
         gpu.queue
             .write_buffer(&self.camera_uniform_buffer, 0, bytemuck::bytes_of(&camera.uniform()));
     }
+
+    fn update_light_uniform_buffer(&mut self, light: &Light, gpu: &Gpu) {
+        gpu.queue
+            .write_buffer(&self.light_uniform_buffer, 0, bytemuck::bytes_of(&light.uniform()));
+    }
 }
 
 fn build_pipelines(
     device: &wgpu::Device,
-    primitive_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
+    bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
     grid_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
 ) -> (wgpu::RenderPipeline, wgpu::RenderPipeline, wgpu::RenderPipeline) {
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -296,7 +307,7 @@ fn build_pipelines(
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("render-pipeline-layout"),
-        bind_group_layouts: primitive_bind_group_layouts,
+        bind_group_layouts,
         immediate_size: 0,
     });
 
@@ -707,4 +718,37 @@ fn build_camera(device: &wgpu::Device, camera: &Camera) -> (wgpu::Buffer, wgpu::
     });
 
     (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group)
+}
+
+fn build_light(device: &wgpu::Device, light: &Light) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
+    let light_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("light-uniform-buffer"),
+        contents: bytemuck::bytes_of(&light.uniform()),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let light_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("light-bind-group-layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+
+    let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("light-bind-group"),
+        layout: &light_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: light_uniform_buffer.as_entire_binding(),
+        }],
+    });
+
+    (light_uniform_buffer, light_bind_group_layout, light_bind_group)
 }

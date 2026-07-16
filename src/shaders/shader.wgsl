@@ -12,6 +12,10 @@ struct Camera {
     view_projection: mat4x4<f32>,
 }
 
+struct Light {
+    direction: vec3<f32>,
+}
+
 struct Primitive {
     model: mat4x4<f32>,
     normal_model: mat4x4<f32>,
@@ -36,6 +40,9 @@ var albedo_texel: texture_2d<f32>;
 
 @group(2) @binding(3)
 var normal_texel: texture_2d<f32>;
+
+@group(3) @binding(0)
+var<uniform> light: Light;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -86,7 +93,7 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
     n = vec3<f32>(bump, bump, 1.0) * n;
     n = normalize(tbn * n);
 
-    let light_dir = normalize(vec3<f32>(0.4, 0.8, 0.6));
+    let light_dir = normalize(light.direction);
 
     let ambient = settings.ambient;
 
