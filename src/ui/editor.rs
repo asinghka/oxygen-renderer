@@ -147,6 +147,11 @@ pub(crate) fn build(
 
                         ui.label("Shininess");
                         Slider::new(&mut settings.shininess, 0.0..=1.0).ui(ui);
+
+                        ui.add_space(12.0);
+
+                        ui.label("Bump strength");
+                        Slider::new(&mut settings.bump, 0.0..=5.0).ui(ui);
                     });
 
                     ui.add_space(12.0);
@@ -161,11 +166,6 @@ pub(crate) fn build(
 
                         ui.label("Background Color");
                         ui.color_edit_button_rgb(&mut settings.background);
-
-                        ui.add_space(12.0);
-
-                        ui.label("Bump strength");
-                        Slider::new(&mut settings.bump, 0.0..=5.0).ui(ui);
 
                         ui.add_space(12.0);
 
