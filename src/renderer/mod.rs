@@ -12,6 +12,8 @@ use wgpu::util::DeviceExt;
 use wgpu::wgt::{SamplerDescriptor, TextureDataOrder};
 use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TexelCopyBufferLayout, TextureDimension, TextureFormat, TextureUsages};
 
+const SHADOW_MAP_SIZE: u32 = 2048;
+
 struct PrimitiveBuffer {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -34,6 +36,7 @@ pub(crate) struct Renderer {
 
     light_uniform_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
+    shadow_map_texture_view: wgpu::TextureView,
 
     camera_uniform_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -141,13 +144,14 @@ impl Renderer {
 
         let placeholder_view = placeholder_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let (grid_buffer, grid_bind_group) = build_grid(&gpu.device, &grid_bind_group_layout);
-        let (subgrid_buffer, subgrid_bind_group) = build_subgrid(&gpu.device, &grid_bind_group_layout);
+        let (grid_buffer, grid_bind_group) = build_grid_binding(&gpu.device, &grid_bind_group_layout);
+        let (subgrid_buffer, subgrid_bind_group) = build_subgrid_binding(&gpu.device, &grid_bind_group_layout);
 
         let (render_settings_uniform_buffer, render_settings_bind_group_layout, render_settings_bind_group) =
-            build_render_settings(&gpu.device, settings);
-        let (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group) = build_camera(&gpu.device, camera);
-        let (light_uniform_buffer, light_bind_group_layout, light_bind_group) = build_light(&gpu.device, light);
+            build_render_settings_binding(&gpu.device, settings);
+        let (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group) = build_camera_binding(&gpu.device, camera);
+        let (light_uniform_buffer, light_bind_group_layout, light_bind_group) = build_light_binding(&gpu.device, light);
+        let shadow_map_texture_view = create_shadow_map(&gpu.device);
 
         let bind_group_layouts = &[
             Some(&camera_bind_group_layout),
@@ -158,7 +162,7 @@ impl Renderer {
 
         let grid_bind_group_layouts = &[Some(&camera_bind_group_layout), Some(&grid_bind_group_layout)];
 
-        let (render_pipeline, wireframe_pipeline, line_pipeline) = build_pipelines(&gpu.device, bind_group_layouts, grid_bind_group_layouts);
+        let (render_pipeline, wireframe_pipeline, line_pipeline) = create_pipelines(&gpu.device, bind_group_layouts, grid_bind_group_layouts);
 
         Self {
             render_pipeline,
@@ -173,6 +177,7 @@ impl Renderer {
             primitive_bind_group_layout,
             light_uniform_buffer,
             light_bind_group,
+            shadow_map_texture_view,
             camera_uniform_buffer,
             camera_bind_group,
             render_settings_uniform_buffer,
@@ -267,7 +272,7 @@ impl Renderer {
     pub(crate) fn load(&mut self, gpu: &Gpu, model: &Model) {
         self.texture_views = create_texture_views(&gpu.device, &gpu.queue, model);
 
-        let (primitive_buffers, primitive_bind_groups) = build_primitives(
+        let (primitive_buffers, primitive_bind_groups) = build_primitives_binding(
             &gpu.device,
             &self.primitive_bind_group_layout,
             &self.texture_views,
@@ -295,7 +300,7 @@ impl Renderer {
     }
 }
 
-fn build_pipelines(
+fn create_pipelines(
     device: &wgpu::Device,
     bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
     grid_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
@@ -445,7 +450,7 @@ fn build_pipelines(
     (render_pipeline, wireframe_pipeline, grid_pipeline)
 }
 
-fn build_grid(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {
+fn build_grid_binding(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {
     let grid_primitive = Primitive::grid(30.0, 16);
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -486,7 +491,7 @@ fn build_grid(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLay
     (grid_buffer, grid_bind_group)
 }
 
-fn build_subgrid(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {
+fn build_subgrid_binding(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {
     let grid_primitive = Primitive::subgrid(30.0, 16);
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -527,7 +532,7 @@ fn build_subgrid(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroup
     (subgrid_buffer, subgrid_bind_group)
 }
 
-fn build_primitives(
+fn build_primitives_binding(
     device: &wgpu::Device,
     primitive_bind_group_layout: &wgpu::BindGroupLayout,
     texture_views: &[Option<wgpu::TextureView>],
@@ -650,7 +655,7 @@ fn create_texture_views(device: &wgpu::Device, queue: &wgpu::Queue, scene: &Mode
         .collect()
 }
 
-fn build_render_settings(device: &wgpu::Device, settings: &RenderSettings) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
+fn build_render_settings_binding(device: &wgpu::Device, settings: &RenderSettings) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
     let render_settings_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("settings-buffer"),
         contents: bytemuck::bytes_of(&settings.uniform()),
@@ -687,7 +692,7 @@ fn build_render_settings(device: &wgpu::Device, settings: &RenderSettings) -> (w
     )
 }
 
-fn build_camera(device: &wgpu::Device, camera: &Camera) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
+fn build_camera_binding(device: &wgpu::Device, camera: &Camera) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
     let camera_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("camera-buffer"),
         contents: bytemuck::bytes_of(&camera.uniform()),
@@ -720,7 +725,7 @@ fn build_camera(device: &wgpu::Device, camera: &Camera) -> (wgpu::Buffer, wgpu::
     (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group)
 }
 
-fn build_light(device: &wgpu::Device, light: &Light) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
+fn build_light_binding(device: &wgpu::Device, light: &Light) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
     let light_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("light-uniform-buffer"),
         contents: bytemuck::bytes_of(&light.uniform()),
@@ -751,4 +756,23 @@ fn build_light(device: &wgpu::Device, light: &Light) -> (wgpu::Buffer, wgpu::Bin
     });
 
     (light_uniform_buffer, light_bind_group_layout, light_bind_group)
+}
+
+fn create_shadow_map(device: &wgpu::Device) -> wgpu::TextureView {
+    let shadow_map_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("shadow-map-texture"),
+        size: wgpu::Extent3d {
+            width: SHADOW_MAP_SIZE,
+            height: SHADOW_MAP_SIZE,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Depth32Float,
+        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+
+    shadow_map_texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
