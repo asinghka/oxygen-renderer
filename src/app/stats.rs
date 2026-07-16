@@ -33,8 +33,8 @@ impl FrameStats {
         }
     }
 
-    pub(crate) fn update(&mut self, scene: &Model) {
-        let (vertices, indices) = scene.get_visible_primitive_stats();
+    pub(crate) fn update(&mut self, model: &Model) {
+        let (vertices, indices) = model.get_visible_primitive_stats();
 
         self.vertices = vertices;
         self.indices = indices;

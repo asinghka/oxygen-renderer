@@ -7,9 +7,9 @@ pub(crate) use state::*;
 pub(crate) use stats::*;
 use std::collections::VecDeque;
 
-use crate::camera::{Camera, CameraController, CameraDescriptor};
+use crate::camera::{Camera, CameraController};
 use crate::renderer::{Gpu, RenderSettings, Renderer, Viewport};
-use crate::scene::{Light, Model, load};
+use crate::scene::{Model, Scene, load};
 use crate::ui::{EditorCommand, Gui, editor};
 use std::sync::{Arc, mpsc};
 use std::thread;
@@ -29,8 +29,7 @@ const PINCH_LINES_PER_MAGNIFICATION: f32 = 40.0;
 pub(crate) struct App {
     app_state: Option<AppState>,
 
-    scene: Model,
-    light: Light,
+    scene: Scene,
 
     camera_controller: CameraController,
     input_state: InputState,
@@ -54,8 +53,7 @@ impl Default for App {
 
         Self {
             app_state: None,
-            scene: Model::default(),
-            light: Light::default(),
+            scene: Scene::default(),
             camera_controller: CameraController::default(),
             input_state: InputState::default(),
             viewport_rect: egui::Rect::NOTHING,
@@ -83,17 +81,12 @@ impl ApplicationHandler for App {
 
         let gpu = Gpu::new(window.clone());
         let mut gui = Gui::new(&window, &gpu.device, gpu.config.format);
-
         let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
+        let renderer = Renderer::new(&self.scene.camera, &gpu, &self.render_settings);
 
-        let camera = Camera::new(&CameraDescriptor {
-            aspect: viewport.width as f32 / viewport.height as f32,
-            ..Default::default()
-        });
+        self.scene.camera.update_aspect_ratio(viewport.width as f32, viewport.height as f32);
 
-        let renderer = Renderer::new(&camera, &gpu, &self.render_settings);
-
-        self.app_state = Some(AppState::new(window, camera, gpu, renderer, gui, viewport));
+        self.app_state = Some(AppState::new(window, gpu, renderer, gui, viewport));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
@@ -131,12 +124,12 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 while let Some(command) = self.editor_commands.pop_front() {
-                    handle(event_loop, app_state, self.viewport_rect, command, self.tx.clone());
+                    handle(event_loop, &mut self.scene.camera, self.viewport_rect, command, self.tx.clone());
                 }
 
-                while let Ok(scene) = self.rx.try_recv() {
-                    app_state.renderer.load(&app_state.gpu, &scene);
-                    self.scene = scene;
+                while let Ok(model) = self.rx.try_recv() {
+                    app_state.renderer.load(&app_state.gpu, &model);
+                    self.scene.model = model;
                 }
 
                 let now = Instant::now();
@@ -145,10 +138,10 @@ impl ApplicationHandler for App {
 
                 // Min to avoid garbage values while focus is lost
                 self.stats.set_time(dt.min(1.0));
-                self.stats.update(&self.scene);
+                self.stats.update(&self.scene.model);
 
                 let displacement = self.camera_controller.compute(&mut self.input_state, dt.min(0.1));
-                app_state.camera.displace(displacement);
+                self.scene.camera.displace(displacement);
 
                 let frame = match app_state.gpu.surface.get_current_texture() {
                     CurrentSurfaceTexture::Success(frame) => frame,
@@ -161,8 +154,8 @@ impl ApplicationHandler for App {
                 let mut encoder = app_state.gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
                 app_state.renderer.render(
-                    &mut app_state.camera,
-                    &self.scene,
+                    &mut self.scene.camera,
+                    &self.scene.model,
                     &app_state.gpu,
                     &mut encoder,
                     &app_state.viewport,
@@ -180,7 +173,7 @@ impl ApplicationHandler for App {
                         viewport_rect = editor::build(
                             ui,
                             app_state.viewport.texture_id,
-                            &mut self.scene,
+                            &mut self.scene.model,
                             &mut self.render_settings,
                             &self.stats,
                             &mut self.editor_commands,
@@ -198,7 +191,7 @@ impl ApplicationHandler for App {
                         self.viewport_rect.size().y,
                     );
 
-                    app_state.camera.update_aspect_ratio(viewport_rect.size().x, viewport_rect.size().y);
+                    self.scene.camera.update_aspect_ratio(viewport_rect.size().x, viewport_rect.size().y);
                 }
 
                 app_state.gpu.queue.submit(std::iter::once(encoder.finish()));
@@ -266,7 +259,7 @@ impl ApplicationHandler for App {
     }
 }
 
-fn handle(event_loop: &ActiveEventLoop, app_state: &mut AppState, viewport_rect: egui::Rect, cmd: EditorCommand, tx: mpsc::Sender<Model>) {
+fn handle(event_loop: &ActiveEventLoop, camera: &mut Camera, viewport_rect: egui::Rect, cmd: EditorCommand, tx: mpsc::Sender<Model>) {
     match cmd {
         EditorCommand::LoadFile(path) => {
             let path = path.to_string_lossy().to_string();
@@ -277,10 +270,7 @@ fn handle(event_loop: &ActiveEventLoop, app_state: &mut AppState, viewport_rect:
             });
         }
         EditorCommand::ResetCamera => {
-            app_state.camera = Camera::new(&CameraDescriptor {
-                aspect: viewport_rect.width() / viewport_rect.height(),
-                ..Default::default()
-            });
+            camera.update_aspect_ratio(viewport_rect.size().x, viewport_rect.size().y);
         }
         EditorCommand::Quit => {
             event_loop.exit();

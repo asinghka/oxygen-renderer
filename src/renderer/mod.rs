@@ -258,8 +258,8 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn load(&mut self, gpu: &Gpu, scene: &Model) {
-        self.texture_views = create_texture_views(&gpu.device, &gpu.queue, scene);
+    pub(crate) fn load(&mut self, gpu: &Gpu, model: &Model) {
+        self.texture_views = create_texture_views(&gpu.device, &gpu.queue, model);
 
         let (primitive_buffers, primitive_bind_groups) = build_primitives(
             &gpu.device,
@@ -267,7 +267,7 @@ impl Renderer {
             &self.texture_views,
             &self.texture_sampler,
             &self.placeholder_view,
-            scene,
+            model,
         );
         self.primitive_buffers = primitive_buffers;
         self.primitive_bind_groups = primitive_bind_groups;

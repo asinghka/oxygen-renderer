@@ -43,6 +43,12 @@ pub(crate) struct Camera {
     zfar: f32,
 }
 
+impl Default for Camera {
+    fn default() -> Self {
+        Self::new(&CameraDescriptor::default())
+    }
+}
+
 impl Camera {
     pub(crate) fn new(camera_descriptor: &CameraDescriptor) -> Self {
         Self {

@@ -13,8 +13,9 @@ pub(crate) use primitive::*;
 pub(crate) use texture::*;
 pub(crate) use vertex::*;
 
+#[derive(Default)]
 pub(crate) struct Scene {
-    camera: Camera,
-    light: Light,
-    model: Model,
+    pub(crate) camera: Camera,
+    pub(crate) light: Light,
+    pub(crate) model: Model,
 }
