@@ -152,6 +152,10 @@ pub(crate) fn build(
 
                         ui.label("Bump strength");
                         Slider::new(&mut settings.bump, 0.0..=5.0).ui(ui);
+
+                        ui.add_space(12.0);
+                        ui.label("Shadows");
+                        ui.checkbox(&mut settings.shadow, "");
                     });
 
                     ui.add_space(12.0);

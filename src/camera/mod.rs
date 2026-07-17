@@ -67,11 +67,11 @@ impl Camera {
         CameraUniform {
             eye: self.eye.to_array(),
             pad: 0,
-            view_projection_matrix: self.build_view_projection_matrix().to_cols_array_2d(),
+            view_projection_matrix: self.view_projection_matrix().to_cols_array_2d(),
         }
     }
 
-    fn build_view_projection_matrix(&self) -> glam::Mat4 {
+    fn view_projection_matrix(&self) -> glam::Mat4 {
         let target = self.eye + self.forward();
 
         let view = view::look_at_mat4(self.eye, target, self.up);
