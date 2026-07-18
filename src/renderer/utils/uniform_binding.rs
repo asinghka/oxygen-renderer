@@ -44,9 +44,6 @@ impl UniformBinding {
             bind_group,
         }
     }
-    pub(crate) fn uniform_buffer(&self) -> &wgpu::Buffer {
-        &self.uniform_buffer
-    }
 
     pub(crate) fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout

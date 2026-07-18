@@ -1,6 +1,6 @@
 mod gpu;
 mod settings;
-mod uniform_binding;
+pub mod utils;
 mod viewport;
 
 pub(crate) use gpu::*;
@@ -8,8 +8,9 @@ pub(crate) use settings::*;
 pub(crate) use viewport::*;
 
 use crate::camera::Camera;
-use crate::renderer::uniform_binding::UniformBinding;
+use crate::renderer::utils::LightBinding;
 use crate::scene::{Light, Model, Primitive, Scene, Vertex};
+use utils::uniform_binding::UniformBinding;
 use wgpu::util::DeviceExt;
 use wgpu::wgt::{SamplerDescriptor, TextureDataOrder};
 use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TexelCopyBufferLayout, TextureDimension, TextureFormat, TextureUsages};
@@ -37,14 +38,8 @@ pub(crate) struct Renderer {
     primitive_bind_groups: Vec<wgpu::BindGroup>,
     primitive_bind_group_layout: wgpu::BindGroupLayout,
 
-    light_uniform_buffer: wgpu::Buffer,
-    light_bind_group: wgpu::BindGroup,
-
+    light_binding: LightBinding,
     camera_uniform_binding: UniformBinding,
-
-    shadow_map_light_bind_group: wgpu::BindGroup,
-    shadow_map_texture_view: wgpu::TextureView,
-
     render_settings_uniform_binding: UniformBinding,
 
     texture_sampler: wgpu::Sampler,
@@ -150,8 +145,6 @@ impl Renderer {
         let (grid_buffer, grid_bind_group) = build_grid_binding(&gpu.device, &grid_bind_group_layout);
         let (subgrid_buffer, subgrid_bind_group) = build_subgrid_binding(&gpu.device, &grid_bind_group_layout);
 
-        let shadow_map_texture_view = create_shadow_map(&gpu.device);
-
         let render_settings_uniform_binding = UniformBinding::new(
             &gpu.device,
             "render-settings",
@@ -166,17 +159,16 @@ impl Renderer {
             wgpu::ShaderStages::VERTEX_FRAGMENT,
         );
 
-        let (light_uniform_buffer, light_bind_group_layout, light_bind_group, shadow_map_light_bind_group_layout, shadow_map_light_bind_group) =
-            build_light_binding(&gpu.device, light, &shadow_map_texture_view);
+        let light_binding = LightBinding::new(&gpu.device, light);
 
         let bind_group_layouts = &[
             Some(camera_uniform_binding.bind_group_layout()),
             Some(render_settings_uniform_binding.bind_group_layout()),
             Some(&primitive_bind_group_layout),
-            Some(&light_bind_group_layout),
+            Some(light_binding.light_bind_group_layout()),
         ];
 
-        let shadow_map_bind_group_layouts = &[Some(&shadow_map_light_bind_group_layout), Some(&primitive_bind_group_layout)];
+        let shadow_map_bind_group_layouts = &[Some(light_binding.shadow_map_bind_group_layout()), Some(&primitive_bind_group_layout)];
 
         let grid_bind_group_layouts = &[Some(camera_uniform_binding.bind_group_layout()), Some(&grid_bind_group_layout)];
 
@@ -195,11 +187,8 @@ impl Renderer {
             primitive_buffers: vec![],
             primitive_bind_groups: vec![],
             primitive_bind_group_layout,
-            light_uniform_buffer,
-            light_bind_group,
+            light_binding,
             camera_uniform_binding,
-            shadow_map_light_bind_group,
-            shadow_map_texture_view,
             render_settings_uniform_binding,
             texture_sampler,
             texture_views: vec![],
@@ -218,7 +207,7 @@ impl Renderer {
         self.render_settings_uniform_binding
             .write(&gpu.queue, bytemuck::bytes_of(&settings.uniform()));
         self.camera_uniform_binding.write(&gpu.queue, bytemuck::bytes_of(&scene.camera.uniform()));
-        self.update_light_uniform_buffer(&scene.light, gpu);
+        self.light_binding.write(&gpu.queue, bytemuck::bytes_of(&scene.light.uniform()));
 
         let invisible = &scene.model.get_invisible_primitives();
 
@@ -227,7 +216,7 @@ impl Renderer {
                 label: Some("shadow-map-render-pass"),
                 color_attachments: &[],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.shadow_map_texture_view,
+                    view: self.light_binding.shadow_map_texture_view(),
                     depth_ops: Some(Operations {
                         load: LoadOp::Clear(1.0),
                         store: StoreOp::Store,
@@ -240,7 +229,7 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(&self.shadow_map_pipeline);
-            render_pass.set_bind_group(0, &self.shadow_map_light_bind_group, &[]);
+            render_pass.set_bind_group(0, self.light_binding.shadow_map_bind_group(), &[]);
 
             for (i, (primitive_buffer, primitive_bind_group)) in self.primitive_buffers.iter().zip(self.primitive_bind_groups.iter()).enumerate() {
                 if invisible.contains(&i) {
@@ -314,7 +303,7 @@ impl Renderer {
                 }
 
                 render_pass.set_bind_group(2, primitive_bind_group, &[]);
-                render_pass.set_bind_group(3, &self.light_bind_group, &[]);
+                render_pass.set_bind_group(3, self.light_binding.light_bind_group(), &[]);
 
                 render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
@@ -336,11 +325,6 @@ impl Renderer {
         );
         self.primitive_buffers = primitive_buffers;
         self.primitive_bind_groups = primitive_bind_groups;
-    }
-
-    fn update_light_uniform_buffer(&mut self, light: &Light, gpu: &Gpu) {
-        gpu.queue
-            .write_buffer(&self.light_uniform_buffer, 0, bytemuck::bytes_of(&light.uniform()));
     }
 }
 
@@ -744,138 +728,4 @@ fn create_texture_views(device: &wgpu::Device, queue: &wgpu::Queue, scene: &Mode
             Some(texture.create_view(&wgpu::TextureViewDescriptor::default()))
         })
         .collect()
-}
-
-fn build_light_binding(
-    device: &wgpu::Device,
-    light: &Light,
-    shadow_map_texture_view: &wgpu::TextureView,
-) -> (
-    wgpu::Buffer,
-    wgpu::BindGroupLayout,
-    wgpu::BindGroup,
-    wgpu::BindGroupLayout,
-    wgpu::BindGroup,
-) {
-    let light_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("light-uniform-buffer"),
-        contents: bytemuck::bytes_of(&light.uniform()),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    });
-
-    let shadow_map_light_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("shadow-map-light-bind-group-layout"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
-    });
-
-    let shadow_map_light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("shadow-map-light-bind-group"),
-        layout: &shadow_map_light_bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: light_uniform_buffer.as_entire_binding(),
-        }],
-    });
-
-    let light_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("light-bind-group-layout"),
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 2,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Depth,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            },
-        ],
-    });
-
-    let shadow_map_sampler = device.create_sampler(&SamplerDescriptor {
-        label: Some("shadow-map-sampler"),
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::MipmapFilterMode::Linear,
-        lod_min_clamp: 0.0,
-        lod_max_clamp: 0.0,
-        compare: Some(wgpu::CompareFunction::LessEqual),
-        anisotropy_clamp: 1,
-        border_color: None,
-    });
-
-    let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("light-bind-group"),
-        layout: &light_bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: light_uniform_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&shadow_map_sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::TextureView(shadow_map_texture_view),
-            },
-        ],
-    });
-
-    (
-        light_uniform_buffer,
-        light_bind_group_layout,
-        light_bind_group,
-        shadow_map_light_bind_group_layout,
-        shadow_map_light_bind_group,
-    )
-}
-
-fn create_shadow_map(device: &wgpu::Device) -> wgpu::TextureView {
-    let shadow_map_texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("shadow-map-texture"),
-        size: wgpu::Extent3d {
-            width: SHADOW_MAP_SIZE,
-            height: SHADOW_MAP_SIZE,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: TextureDimension::D2,
-        format: TextureFormat::Depth32Float,
-        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-        view_formats: &[],
-    });
-
-    shadow_map_texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
