@@ -1,5 +1,6 @@
 mod gpu;
 mod settings;
+mod uniform_binding;
 mod viewport;
 
 pub(crate) use gpu::*;
@@ -7,6 +8,7 @@ pub(crate) use settings::*;
 pub(crate) use viewport::*;
 
 use crate::camera::Camera;
+use crate::renderer::uniform_binding::UniformBinding;
 use crate::scene::{Light, Model, Primitive, Scene, Vertex};
 use wgpu::util::DeviceExt;
 use wgpu::wgt::{SamplerDescriptor, TextureDataOrder};
@@ -38,14 +40,12 @@ pub(crate) struct Renderer {
     light_uniform_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
 
+    camera_uniform_binding: UniformBinding,
+
     shadow_map_light_bind_group: wgpu::BindGroup,
     shadow_map_texture_view: wgpu::TextureView,
 
-    camera_uniform_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup,
-
-    render_settings_uniform_buffer: wgpu::Buffer,
-    render_settings_bind_group: wgpu::BindGroup,
+    render_settings_uniform_binding: UniformBinding,
 
     texture_sampler: wgpu::Sampler,
     texture_views: Vec<Option<wgpu::TextureView>>,
@@ -152,22 +152,33 @@ impl Renderer {
 
         let shadow_map_texture_view = create_shadow_map(&gpu.device);
 
-        let (render_settings_uniform_buffer, render_settings_bind_group_layout, render_settings_bind_group) =
-            build_render_settings_binding(&gpu.device, settings);
-        let (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group) = build_camera_binding(&gpu.device, camera);
+        let render_settings_uniform_binding = UniformBinding::new(
+            &gpu.device,
+            "render-settings",
+            bytemuck::bytes_of(&settings.uniform()),
+            wgpu::ShaderStages::FRAGMENT,
+        );
+
+        let camera_uniform_binding = UniformBinding::new(
+            &gpu.device,
+            "camera",
+            bytemuck::bytes_of(&camera.uniform()),
+            wgpu::ShaderStages::VERTEX_FRAGMENT,
+        );
+
         let (light_uniform_buffer, light_bind_group_layout, light_bind_group, shadow_map_light_bind_group_layout, shadow_map_light_bind_group) =
             build_light_binding(&gpu.device, light, &shadow_map_texture_view);
 
         let bind_group_layouts = &[
-            Some(&camera_bind_group_layout),
-            Some(&render_settings_bind_group_layout),
+            Some(camera_uniform_binding.bind_group_layout()),
+            Some(render_settings_uniform_binding.bind_group_layout()),
             Some(&primitive_bind_group_layout),
             Some(&light_bind_group_layout),
         ];
 
         let shadow_map_bind_group_layouts = &[Some(&shadow_map_light_bind_group_layout), Some(&primitive_bind_group_layout)];
 
-        let grid_bind_group_layouts = &[Some(&camera_bind_group_layout), Some(&grid_bind_group_layout)];
+        let grid_bind_group_layouts = &[Some(camera_uniform_binding.bind_group_layout()), Some(&grid_bind_group_layout)];
 
         let (render_pipeline, wireframe_pipeline, shadow_map_pipeline, line_pipeline) =
             create_pipelines(&gpu.device, bind_group_layouts, grid_bind_group_layouts, shadow_map_bind_group_layouts);
@@ -181,19 +192,17 @@ impl Renderer {
             grid_bind_group,
             subgrid_buffer,
             subgrid_bind_group,
-            primitive_buffers: Vec::new(),
-            primitive_bind_groups: Vec::new(),
+            primitive_buffers: vec![],
+            primitive_bind_groups: vec![],
             primitive_bind_group_layout,
             light_uniform_buffer,
             light_bind_group,
+            camera_uniform_binding,
             shadow_map_light_bind_group,
             shadow_map_texture_view,
-            camera_uniform_buffer,
-            camera_bind_group,
-            render_settings_uniform_buffer,
-            render_settings_bind_group,
+            render_settings_uniform_binding,
             texture_sampler,
-            texture_views: Vec::new(),
+            texture_views: vec![],
             placeholder_view,
         }
     }
@@ -206,8 +215,9 @@ impl Renderer {
         viewport: &Viewport,
         settings: &mut RenderSettings,
     ) {
-        self.update_settings_uniform_buffer(settings, gpu);
-        self.update_camera_uniform_buffer(&scene.camera, gpu);
+        self.render_settings_uniform_binding
+            .write(&gpu.queue, bytemuck::bytes_of(&settings.uniform()));
+        self.camera_uniform_binding.write(&gpu.queue, bytemuck::bytes_of(&scene.camera.uniform()));
         self.update_light_uniform_buffer(&scene.light, gpu);
 
         let invisible = &scene.model.get_invisible_primitives();
@@ -274,7 +284,7 @@ impl Renderer {
                 multiview_mask: None,
             });
 
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(0, self.camera_uniform_binding.bind_group(), &[]);
 
             if settings.grid {
                 render_pass.set_pipeline(&self.line_pipeline);
@@ -296,7 +306,7 @@ impl Renderer {
                 render_pass.set_pipeline(&self.render_pipeline);
             }
 
-            render_pass.set_bind_group(1, &self.render_settings_bind_group, &[]);
+            render_pass.set_bind_group(1, self.render_settings_uniform_binding.bind_group(), &[]);
 
             for (i, (primitive_buffer, primitive_bind_group)) in self.primitive_buffers.iter().zip(self.primitive_bind_groups.iter()).enumerate() {
                 if invisible.contains(&i) {
@@ -326,16 +336,6 @@ impl Renderer {
         );
         self.primitive_buffers = primitive_buffers;
         self.primitive_bind_groups = primitive_bind_groups;
-    }
-
-    fn update_settings_uniform_buffer(&mut self, settings: &RenderSettings, gpu: &Gpu) {
-        gpu.queue
-            .write_buffer(&self.render_settings_uniform_buffer, 0, bytemuck::bytes_of(&settings.uniform()));
-    }
-
-    fn update_camera_uniform_buffer(&mut self, camera: &Camera, gpu: &Gpu) {
-        gpu.queue
-            .write_buffer(&self.camera_uniform_buffer, 0, bytemuck::bytes_of(&camera.uniform()));
     }
 
     fn update_light_uniform_buffer(&mut self, light: &Light, gpu: &Gpu) {
@@ -744,76 +744,6 @@ fn create_texture_views(device: &wgpu::Device, queue: &wgpu::Queue, scene: &Mode
             Some(texture.create_view(&wgpu::TextureViewDescriptor::default()))
         })
         .collect()
-}
-
-fn build_render_settings_binding(device: &wgpu::Device, settings: &RenderSettings) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
-    let render_settings_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("settings-buffer"),
-        contents: bytemuck::bytes_of(&settings.uniform()),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    });
-
-    let render_settings_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("render-settings-bind-group-layout"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
-    });
-
-    let render_settings_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("render-settings-bind-group"),
-        layout: &render_settings_bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: render_settings_uniform_buffer.as_entire_binding(),
-        }],
-    });
-
-    (
-        render_settings_uniform_buffer,
-        render_settings_bind_group_layout,
-        render_settings_bind_group,
-    )
-}
-
-fn build_camera_binding(device: &wgpu::Device, camera: &Camera) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
-    let camera_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("camera-buffer"),
-        contents: bytemuck::bytes_of(&camera.uniform()),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    });
-
-    let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("camera-bind-group-layout"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
-    });
-
-    let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("camera-bind-group"),
-        layout: &camera_bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: camera_uniform_buffer.as_entire_binding(),
-        }],
-    });
-
-    (camera_uniform_buffer, camera_bind_group_layout, camera_bind_group)
 }
 
 fn build_light_binding(
