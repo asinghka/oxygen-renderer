@@ -14,7 +14,7 @@ pub(crate) struct RenderSettingsUniform {
     specular_exponent: f32,
     bump: f32,
     shadow: u32,
-    _pad: f32,
+    depth: u32,
 }
 
 pub(crate) struct RenderSettings {
@@ -57,7 +57,7 @@ impl RenderSettings {
             specular_exponent: self.shininess * 256.0,
             bump: self.bump,
             shadow: self.shadow as u32,
-            _pad: 0.0,
+            depth: matches!(self.render_mode, RenderMode::Depth) as u32,
         }
     }
 }

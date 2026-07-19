@@ -11,6 +11,7 @@ struct RenderSettings {
     specular_exponent: f32,
     bump: f32,
     shadow: u32,
+    depth: u32,
 }
 
 struct Light {
@@ -89,6 +90,10 @@ fn vertex_shader(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
+    if settings.depth == 1u {
+        return depth_color(in.clip_pos);
+    }
+
     let uv = in.uv;
     let albedo = textureSample(albedo_texel, tex_sampler, uv).rgb * primitive.color;
 
@@ -161,4 +166,13 @@ fn apply_normal_map(normal: vec3<f32>, tangent: vec4<f32>, uv: vec2<f32>) -> vec
     ));
 
     return normalize(tangent_to_world * scaled_tangent_space_normal);
+}
+
+fn depth_color(clip_pos: vec4<f32>) -> vec4<f32> {
+    let near = 0.5;
+    let far = 5.0;
+
+    let z = clip_pos.z;
+    let t = (near * z) / (far - z * (far - near));
+    return vec4<f32>(t, t, t, 1.0);
 }

@@ -130,6 +130,7 @@ pub(crate) fn build(
                             .show_ui(ui, |ui| {
                                 ui.selectable_value(&mut settings.render_mode, RenderMode::Color, "Color");
                                 ui.selectable_value(&mut settings.render_mode, RenderMode::Wireframe, "Wireframe");
+                                ui.selectable_value(&mut settings.render_mode, RenderMode::Depth, "Depth");
                             });
                     });
 
