@@ -1,5 +1,6 @@
 use glam::camera::rh::proj::directx;
 use glam::camera::rh::view;
+use std::f32::consts::PI;
 use std::mem::offset_of;
 
 const _: () = assert!(size_of::<LightUniform>() == 80);
@@ -13,10 +14,18 @@ pub(crate) struct LightUniform {
     view_orthographic_matrix: [[f32; 4]; 4],
 }
 
-#[derive(Default)]
 pub(crate) struct Light {
     pub(crate) azimuth: f32,
     pub(crate) elevation: f32,
+}
+
+impl Default for Light {
+    fn default() -> Self {
+        Self {
+            azimuth: PI,
+            elevation: PI / 3.0,
+        }
+    }
 }
 
 impl Light {

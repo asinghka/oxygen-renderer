@@ -13,3 +13,11 @@ pub(crate) struct PrimitiveBuffer {
     pub(crate) index_buffer: wgpu::Buffer,
     pub(crate) num_indices: u32,
 }
+
+impl PrimitiveBuffer {
+    pub(crate) fn record(&self, render_pass: &mut wgpu::RenderPass) {
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+    }
+}

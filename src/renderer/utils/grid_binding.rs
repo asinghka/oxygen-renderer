@@ -60,6 +60,16 @@ impl GridBindings {
     pub(crate) fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout
     }
+
+    pub(crate) fn record_grid(&self, render_pass: &mut wgpu::RenderPass) {
+        render_pass.set_bind_group(1, self.grid_bind_group(), &[]);
+        self.grid_buffer.record(render_pass);
+    }
+
+    pub(crate) fn record_subgrid(&self, render_pass: &mut wgpu::RenderPass) {
+        render_pass.set_bind_group(1, self.subgrid_bind_group(), &[]);
+        self.subgrid_buffer.record(render_pass);
+    }
 }
 
 fn build_grid_binding(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {

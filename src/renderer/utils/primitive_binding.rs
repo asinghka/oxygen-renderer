@@ -1,6 +1,7 @@
 use crate::renderer::Gpu;
 use crate::renderer::utils::PrimitiveBuffer;
 use crate::scene::Model;
+use std::collections::HashSet;
 use wgpu::util::{DeviceExt, TextureDataOrder};
 use wgpu::wgt::SamplerDescriptor;
 use wgpu::{TexelCopyBufferLayout, TextureDimension, TextureFormat, TextureUsages};
@@ -104,16 +105,17 @@ impl PrimitiveBindings {
         self.bind_groups = primitive_bind_groups;
     }
 
+    pub(crate) fn visible(&self, invisible: &HashSet<usize>) -> impl Iterator<Item = (&PrimitiveBuffer, &wgpu::BindGroup)> {
+        self.buffers
+            .iter()
+            .zip(self.bind_groups.iter())
+            .enumerate()
+            .filter(|(i, (_, _))| !invisible.contains(i))
+            .map(|(_, (buf, bg))| (buf, bg))
+    }
+
     pub(crate) fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout
-    }
-
-    pub(crate) fn buffers(&self) -> &Vec<PrimitiveBuffer> {
-        &self.buffers
-    }
-
-    pub(crate) fn bind_groups(&self) -> &Vec<wgpu::BindGroup> {
-        &self.bind_groups
     }
 }
 

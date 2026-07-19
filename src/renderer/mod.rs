@@ -5,6 +5,7 @@ mod viewport;
 
 pub(crate) use gpu::*;
 pub(crate) use settings::*;
+use std::collections::HashSet;
 pub(crate) use viewport::*;
 
 use crate::camera::Camera;
@@ -79,14 +80,7 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn render(
-        &mut self,
-        scene: &Scene,
-        gpu: &Gpu,
-        encoder: &mut wgpu::CommandEncoder,
-        viewport: &Viewport,
-        settings: &mut RenderSettings,
-    ) {
+    pub(crate) fn render(&mut self, scene: &Scene, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, viewport: &Viewport, settings: &RenderSettings) {
         self.render_settings_uniform_binding
             .write(&gpu.queue, bytemuck::bytes_of(&settings.uniform()));
         self.camera_uniform_binding.write(&gpu.queue, bytemuck::bytes_of(&scene.camera.uniform()));
@@ -94,121 +88,94 @@ impl Renderer {
 
         let invisible = &scene.model.get_invisible_primitives();
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("shadow-map-render-pass"),
-                color_attachments: &[],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: self.light_binding.shadow_map_texture_view(),
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.0),
-                        store: StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-
-            render_pass.set_pipeline(&self.shadow_map_pipeline);
-            render_pass.set_bind_group(0, self.light_binding.shadow_map_bind_group(), &[]);
-
-            for (i, (primitive_buffer, primitive_bind_group)) in self
-                .primitive_bindings
-                .buffers()
-                .iter()
-                .zip(self.primitive_bindings.bind_groups().iter())
-                .enumerate()
-            {
-                if invisible.contains(&i) {
-                    continue;
-                }
-
-                render_pass.set_bind_group(1, primitive_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
-            }
-        }
-
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("render-pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &viewport.texture_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color {
-                            r: settings.background[0] as f64,
-                            g: settings.background[1] as f64,
-                            b: settings.background[2] as f64,
-                            a: 1.0,
-                        }),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &viewport.depth_texture_view,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.0),
-                        store: StoreOp::Discard,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-
-            render_pass.set_bind_group(0, self.camera_uniform_binding.bind_group(), &[]);
-
-            if settings.grid {
-                render_pass.set_pipeline(&self.line_pipeline);
-
-                render_pass.set_bind_group(1, self.grid_bindings.grid_bind_group(), &[]);
-                render_pass.set_vertex_buffer(0, self.grid_bindings.grid_buffer().vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.grid_bindings.grid_buffer().index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..self.grid_bindings.grid_buffer().num_indices, 0, 0..1);
-
-                render_pass.set_bind_group(1, self.grid_bindings.subgrid_bind_group(), &[]);
-                render_pass.set_vertex_buffer(0, self.grid_bindings.subgrid_buffer().vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.grid_bindings.subgrid_buffer().index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..self.grid_bindings.subgrid_buffer().num_indices, 0, 0..1);
-            }
-
-            if settings.wireframe {
-                render_pass.set_pipeline(&self.wireframe_pipeline);
-            } else {
-                render_pass.set_pipeline(&self.render_pipeline);
-            }
-
-            render_pass.set_bind_group(1, self.render_settings_uniform_binding.bind_group(), &[]);
-
-            for (i, (primitive_buffer, primitive_bind_group)) in self
-                .primitive_bindings
-                .buffers()
-                .iter()
-                .zip(self.primitive_bindings.bind_groups().iter())
-                .enumerate()
-            {
-                if invisible.contains(&i) {
-                    continue;
-                }
-
-                render_pass.set_bind_group(2, primitive_bind_group, &[]);
-                render_pass.set_bind_group(3, self.light_binding.light_bind_group(), &[]);
-
-                render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
-            }
-        }
+        self.shadow_pass(encoder, invisible);
+        self.main_pass(encoder, invisible, viewport, settings);
     }
 
     pub(crate) fn load(&mut self, gpu: &Gpu, model: &Model) {
         self.primitive_bindings.update_from_model(gpu, model);
+    }
+
+    fn shadow_pass(&self, encoder: &mut wgpu::CommandEncoder, invisible: &HashSet<usize>) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("shadow-map-render-pass"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: self.light_binding.shadow_map_texture_view(),
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0),
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+
+        render_pass.set_pipeline(&self.shadow_map_pipeline);
+        render_pass.set_bind_group(0, self.light_binding.shadow_map_bind_group(), &[]);
+
+        for (primitive_buffer, primitive_bind_group) in self.primitive_bindings.visible(invisible) {
+            render_pass.set_bind_group(1, primitive_bind_group, &[]);
+
+            primitive_buffer.record(&mut render_pass);
+        }
+    }
+
+    fn main_pass(&self, encoder: &mut wgpu::CommandEncoder, invisible: &HashSet<usize>, viewport: &Viewport, settings: &RenderSettings) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("main-render-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &viewport.texture_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color {
+                        r: settings.background[0] as f64,
+                        g: settings.background[1] as f64,
+                        b: settings.background[2] as f64,
+                        a: 1.0,
+                    }),
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &viewport.depth_texture_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0),
+                    store: StoreOp::Discard,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+
+        render_pass.set_bind_group(0, self.camera_uniform_binding.bind_group(), &[]);
+
+        if settings.grid {
+            render_pass.set_pipeline(&self.line_pipeline);
+
+            self.grid_bindings.record_grid(&mut render_pass);
+            self.grid_bindings.record_subgrid(&mut render_pass);
+        }
+
+        if settings.wireframe {
+            render_pass.set_pipeline(&self.wireframe_pipeline);
+        } else {
+            render_pass.set_pipeline(&self.render_pipeline);
+        }
+
+        render_pass.set_bind_group(1, self.render_settings_uniform_binding.bind_group(), &[]);
+        render_pass.set_bind_group(3, self.light_binding.light_bind_group(), &[]);
+
+        for (primitive_buffer, primitive_bind_group) in self.primitive_bindings.visible(invisible) {
+            render_pass.set_bind_group(2, primitive_bind_group, &[]);
+
+            primitive_buffer.record(&mut render_pass);
+        }
     }
 }
 

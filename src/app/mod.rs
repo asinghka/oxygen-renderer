@@ -155,7 +155,7 @@ impl ApplicationHandler for App {
 
                 app_state
                     .renderer
-                    .render(&self.scene, &app_state.gpu, &mut encoder, &app_state.viewport, &mut self.render_settings);
+                    .render(&self.scene, &app_state.gpu, &mut encoder, &app_state.viewport, &self.render_settings);
 
                 let mut viewport_rect = egui::Rect::NOTHING;
                 app_state.gui.render(
