@@ -53,6 +53,8 @@ impl Renderer {
 
         let light_binding = LightBinding::new(&gpu.device, light);
 
+        // Primitive bind group at the highest index as this changed per draw call
+        // potentially invalidating bind groups higher than it
         let bind_group_layouts = &[
             Some(camera_uniform_binding.bind_group_layout()),
             Some(render_settings_uniform_binding.bind_group_layout()),

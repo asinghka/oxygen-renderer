@@ -79,7 +79,6 @@ fn vertex_shader(in: VertexInput) -> VertexOutput {
     out.world_pos = world_pos.xyz;
 
     out.light_pos = light.view_ortho * world_pos;
-
     out.normal = (normal_model * vec4<f32>(in.normal, 0.0)).xyz;
     out.tangent = vec4<f32>((model * vec4<f32>(in.tangent.xyz, 0.0)).xyz, in.tangent.w);
     out.clip_pos = camera.view_projection * world_pos;
@@ -90,22 +89,49 @@ fn vertex_shader(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
-    var n = normalize(in.normal);
+    let uv = in.uv;
+    let albedo = textureSample(albedo_texel, tex_sampler, uv).rgb * primitive.color;
 
-    let t = normalize(in.tangent.xyz);
-    let b = cross(n, t) * in.tangent.w;
-    let tbn = mat3x3<f32>(t, b, n);
+    let normal = apply_normal_map(in.normal, in.tangent, uv);
+    let shadow = sample_shadow(in.light_pos);
+    let color = blinn_phong_lighting(normal, light.direction, camera.eye, in.world_pos, albedo, shadow);
 
-    var bump = primitive.bump * settings.bump;
+    return vec4<f32>(color, 1.0);
+}
 
-    n = textureSample(normal_texel, tex_sampler, in.uv).xyz;
-    n = 2.0 * n - 1.0;
-    n = vec3<f32>(bump, bump, 1.0) * n;
-    n = normalize(tbn * n);
+fn blinn_phong_lighting(normal: vec3<f32>, light_dir: vec3<f32>, camera_eye: vec3<f32>, world_space_pos: vec3<f32>, albedo: vec3<f32>, shadow: f32) -> vec3<f32> {
+    let n_dot_l = dot(normalize(normal), normalize(light_dir));
 
-    let light_dir = normalize(light.direction);
+    let ambient = settings.ambient;
+    let diffuse = diffuse(n_dot_l) * shadow;
+    let specular = specular(camera_eye, light_dir, normal, n_dot_l, world_space_pos) * shadow;
 
-    let ndc = in.light_pos.xyz / in.light_pos.w;
+    return albedo * (ambient + diffuse) + specular;
+}
+
+fn diffuse(n_dot_l: f32) -> f32 {
+    var diffuse = 0.0;
+    if settings.diffuse != 0u {
+        diffuse = max(n_dot_l, 0.0);
+    }
+
+    return diffuse;
+}
+
+fn specular(camera_eye: vec3<f32>, light_dir: vec3<f32>, normal: vec3<f32>, n_dot_l: f32, world_space_pos: vec3<f32>) -> f32 {
+    let view_dir = normalize(camera_eye - world_space_pos);
+    let half_dir = normalize(light_dir + view_dir);
+
+    var specular = 0.0;
+    if settings.specular != 0u && n_dot_l > 0.0 { // Make sure specular glint is only visible when facing the light
+        specular = settings.specular_strength * pow(max(dot(normal, half_dir), 0.0), settings.specular_exponent);
+    }
+
+    return specular;
+}
+
+fn sample_shadow(light_space_pos: vec4<f32>) -> f32 {
+    let ndc = light_space_pos.xyz / light_space_pos.w;
     let uv  = ndc.xy * vec2(0.5, -0.5) + vec2(0.5, 0.5);
 
     var shadow = 1.0;
@@ -113,28 +139,26 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
         shadow = textureSampleCompareLevel(shadow_map_texel, shadow_map_sampler, uv, ndc.z);
     }
 
-    let ambient = settings.ambient;
+    return shadow;
+}
 
-    let albedo = textureSample(albedo_texel, tex_sampler, in.uv).rgb * primitive.color;
-
-    let n_dot_l = dot(n, light_dir);
-
-    var diffuse = 0.0;
-    if settings.diffuse != 0u {
-        diffuse = max(n_dot_l, 0.0);
+fn apply_normal_map(normal: vec3<f32>, tangent: vec4<f32>, uv: vec2<f32>) -> vec3<f32> {
+    let normal_strength = primitive.bump * settings.bump;
+    if normal_strength == 0.0 {
+        return normalize(normal);
     }
-    diffuse = diffuse * shadow;
 
-    let view_dir = normalize(camera.eye - in.world_pos);
-    let half_dir = normalize(light_dir + view_dir);
+    let world_normal = normalize(normal);
+    let world_tangent = normalize(tangent.xyz - world_normal * dot(world_normal, tangent.xyz));
+    let world_bitangent = normalize(cross(world_normal, world_tangent) * tangent.w);
+    let tangent_to_world = mat3x3<f32>(world_tangent, world_bitangent, world_normal);
 
-    var specular = 0.0;
-    if settings.specular != 0u && n_dot_l > 0.0 { // Make sure specular glint is only visible when facing the light
-        specular = settings.specular_strength * pow(max(dot(n, half_dir), 0.0), settings.specular_exponent);
-    }
-    specular = specular * shadow;
+    let sampled_normal = textureSample(normal_texel, tex_sampler, uv).xyz;
+    let tangent_space_normal = sampled_normal * 2.0 - vec3<f32>(1.0);
+    let scaled_tangent_space_normal = normalize(vec3<f32>(
+        tangent_space_normal.xy * normal_strength,
+        tangent_space_normal.z,
+    ));
 
-    let color = albedo * (ambient + diffuse) + specular;
-
-    return vec4<f32>(color, 1.0);
+    return normalize(tangent_to_world * scaled_tangent_space_normal);
 }
