@@ -26,7 +26,7 @@ pub(crate) struct RenderSettings {
     pub(crate) bump: f32,
     pub(crate) shadow: bool,
     pub(crate) background: [f32; 3],
-    pub(crate) wireframe: bool,
+    pub(crate) render_mode: RenderMode,
     pub(crate) grid: bool,
 }
 
@@ -41,7 +41,7 @@ impl Default for RenderSettings {
             bump: 1.0,
             shadow: true,
             background: [0.08; 3],
-            wireframe: false,
+            render_mode: RenderMode::Color,
             grid: true,
         }
     }
@@ -60,4 +60,12 @@ impl RenderSettings {
             _pad: 0.0,
         }
     }
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum RenderMode {
+    Color,
+    Wireframe,
+    Depth,
+    Normal,
 }

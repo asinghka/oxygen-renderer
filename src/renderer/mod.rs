@@ -62,6 +62,11 @@ impl Renderer {
             Some(primitive_bindings.bind_group_layout()),
         ];
 
+        let wireframe_bind_group_layouts = &[
+            Some(camera_uniform_binding.bind_group_layout()),
+            Some(primitive_bindings.bind_group_layout()),
+        ];
+
         let shadow_map_bind_group_layouts = &[
             Some(light_binding.shadow_map_bind_group_layout()),
             Some(primitive_bindings.bind_group_layout()),
@@ -69,8 +74,13 @@ impl Renderer {
 
         let grid_bind_group_layouts = &[Some(camera_uniform_binding.bind_group_layout()), Some(grid_bindings.bind_group_layout())];
 
-        let (render_pipeline, wireframe_pipeline, shadow_map_pipeline, line_pipeline) =
-            create_pipelines(&gpu.device, bind_group_layouts, grid_bind_group_layouts, shadow_map_bind_group_layouts);
+        let (render_pipeline, wireframe_pipeline, shadow_map_pipeline, line_pipeline) = create_pipelines(
+            &gpu.device,
+            bind_group_layouts,
+            wireframe_bind_group_layouts,
+            grid_bind_group_layouts,
+            shadow_map_bind_group_layouts,
+        );
 
         Self {
             render_pipeline,
@@ -162,30 +172,40 @@ impl Renderer {
 
         if settings.grid {
             render_pass.set_pipeline(&self.line_pipeline);
-
             self.grid_bindings.record(&mut render_pass, 1);
         }
 
-        let pipeline = if settings.wireframe {
-            &self.wireframe_pipeline
-        } else {
-            &self.render_pipeline
+        match &settings.render_mode {
+            RenderMode::Wireframe => {
+                render_pass.set_pipeline(&self.wireframe_pipeline);
+                self.primitive_bindings.record(&mut render_pass, 1, invisible);
+            }
+            RenderMode::Color | _ => {
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_bind_group(1, self.render_settings_uniform_binding.bind_group(), &[]);
+                render_pass.set_bind_group(2, self.light_binding.light_bind_group(), &[]);
+                self.primitive_bindings.record(&mut render_pass, 3, invisible);
+            }
         };
-        render_pass.set_pipeline(pipeline);
-
-        render_pass.set_bind_group(1, self.render_settings_uniform_binding.bind_group(), &[]);
-        render_pass.set_bind_group(2, self.light_binding.light_bind_group(), &[]);
-
-        self.primitive_bindings.record(&mut render_pass, 3, invisible);
     }
 }
 
 fn create_pipelines(
     device: &wgpu::Device,
     bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
+    wireframe_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
     grid_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
     shadow_map_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
 ) -> (wgpu::RenderPipeline, wgpu::RenderPipeline, wgpu::RenderPipeline, wgpu::RenderPipeline) {
+    let render_pipeline = create_render_pipeline(device, bind_group_layouts);
+    let wireframe_pipeline = create_wireframe_pipeline(device, wireframe_bind_group_layouts);
+    let grid_pipeline = create_grid_pipeline(device, grid_bind_group_layouts);
+    let shadow_map_pipeline = create_shadow_map_pipeline(device, shadow_map_bind_group_layouts);
+
+    (render_pipeline, wireframe_pipeline, shadow_map_pipeline, grid_pipeline)
+}
+
+fn create_render_pipeline(device: &wgpu::Device, bind_group_layouts: &[Option<&wgpu::BindGroupLayout>]) -> wgpu::RenderPipeline {
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("shader"),
         source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
@@ -197,7 +217,7 @@ fn create_pipelines(
         immediate_size: 0,
     });
 
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("render-pipeline"),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
@@ -235,9 +255,22 @@ fn create_pipelines(
         }),
         multiview_mask: None,
         cache: None,
+    })
+}
+
+fn create_wireframe_pipeline(device: &wgpu::Device, bind_group_layouts: &[Option<&wgpu::BindGroupLayout>]) -> wgpu::RenderPipeline {
+    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("wireframe-shader"),
+        source: ShaderSource::Wgsl(include_str!("../shaders/wireframe.wgsl").into()),
     });
 
-    let wireframe_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("wireframe-pipeline-layout"),
+        bind_group_layouts,
+        immediate_size: 0,
+    });
+
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("wireframe-pipeline"),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
@@ -275,8 +308,10 @@ fn create_pipelines(
         }),
         multiview_mask: None,
         cache: None,
-    });
+    })
+}
 
+fn create_shadow_map_pipeline(device: &wgpu::Device, bind_group_layouts: &[Option<&wgpu::BindGroupLayout>]) -> wgpu::RenderPipeline {
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("shadow-map-shader"),
         source: ShaderSource::Wgsl(include_str!("../shaders/shadow.wgsl").into()),
@@ -284,11 +319,11 @@ fn create_pipelines(
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("shadow-map-pipeline-layout"),
-        bind_group_layouts: shadow_map_bind_group_layouts,
+        bind_group_layouts,
         immediate_size: 0,
     });
 
-    let shadow_map_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("shadow-map-pipeline"),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
@@ -321,8 +356,10 @@ fn create_pipelines(
         fragment: None,
         multiview_mask: None,
         cache: None,
-    });
+    })
+}
 
+fn create_grid_pipeline(device: &wgpu::Device, bind_group_layouts: &[Option<&wgpu::BindGroupLayout>]) -> wgpu::RenderPipeline {
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("grid-shader"),
         source: ShaderSource::Wgsl(include_str!("../shaders/grid.wgsl").into()),
@@ -330,11 +367,11 @@ fn create_pipelines(
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("grid-pipeline-layout"),
-        bind_group_layouts: grid_bind_group_layouts,
+        bind_group_layouts,
         immediate_size: 0,
     });
 
-    let grid_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("grid-pipeline"),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
@@ -372,7 +409,5 @@ fn create_pipelines(
         }),
         multiview_mask: None,
         cache: None,
-    });
-
-    (render_pipeline, wireframe_pipeline, shadow_map_pipeline, grid_pipeline)
+    })
 }

@@ -1,9 +1,9 @@
 use crate::app::FrameStats;
-use crate::renderer::RenderSettings;
+use crate::renderer::{RenderMode, RenderSettings};
 use crate::scene::{Light, Model, ModelNode};
 use egui::collapsing_header::CollapsingState;
 use egui::load::SizedTexture;
-use egui::{Align, Button, CentralPanel, CollapsingHeader, Frame, Layout, Margin, MenuBar, Panel, ScrollArea, Slider, Widget};
+use egui::{Align, Button, CentralPanel, CollapsingHeader, ComboBox, Frame, Layout, Margin, MenuBar, Panel, ScrollArea, Slider, Widget};
 use re_ui::UiExt;
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -124,8 +124,13 @@ pub(crate) fn build(
                     CollapsingHeader::new("Rendering").show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 4.0;
 
-                        ui.label("Wireframe Mode");
-                        ui.checkbox(&mut settings.wireframe, "");
+                        ui.label("Mode");
+                        ComboBox::new("render-mode-combobox", "")
+                            .selected_text(format!("{:?}", settings.render_mode))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut settings.render_mode, RenderMode::Color, "Color");
+                                ui.selectable_value(&mut settings.render_mode, RenderMode::Wireframe, "Wireframe");
+                            });
                     });
 
                     ui.add_space(12.0);
