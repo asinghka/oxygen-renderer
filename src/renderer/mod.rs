@@ -180,7 +180,7 @@ impl Renderer {
                 render_pass.set_pipeline(&self.wireframe_pipeline);
                 self.primitive_bindings.record(&mut render_pass, 1, invisible);
             }
-            RenderMode::Color | _ => {
+            _ => {
                 render_pass.set_pipeline(&self.render_pipeline);
                 render_pass.set_bind_group(1, self.render_settings_uniform_binding.bind_group(), &[]);
                 render_pass.set_bind_group(2, self.light_binding.light_bind_group(), &[]);
