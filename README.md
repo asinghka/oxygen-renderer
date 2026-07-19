@@ -1,6 +1,6 @@
 # Oxygen
 
-A real-time glTF viewer and renderer built from scratch in Rust on `wgpu`. Oxygen presents the
+A real-time [glTF](https://www.khronos.org/gltf/) viewer and renderer built from scratch in Rust on [wgpu](https://github.com/gfx-rs/wgpu). Oxygen presents the
 renderer as a small game-engine editor: load a model, inspect its scene graph, fly through the
 viewport, and tune its shading live.
 
