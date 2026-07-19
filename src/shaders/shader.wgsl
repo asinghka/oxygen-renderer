@@ -1,3 +1,8 @@
+struct Camera {
+    eye: vec3<f32>,
+    view_projection: mat4x4<f32>,
+}
+
 struct RenderSettings {
     ambient: f32,
     diffuse: u32,
@@ -6,11 +11,6 @@ struct RenderSettings {
     specular_exponent: f32,
     bump: f32,
     shadow: u32,
-}
-
-struct Camera {
-    eye: vec3<f32>,
-    view_projection: mat4x4<f32>,
 }
 
 struct Light {
