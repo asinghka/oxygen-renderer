@@ -126,9 +126,11 @@ pub(crate) fn build(
 
                         ui.label("Wireframe Mode");
                         ui.checkbox(&mut settings.wireframe, "");
+                    });
 
-                        ui.add_space(12.0);
+                    ui.add_space(12.0);
 
+                    CollapsingHeader::new("Lighting").show(ui, |ui| {
                         ui.label("Ambient Light Strength");
                         Slider::new(&mut settings.ambient, 0.0..=1.0).ui(ui);
 
@@ -154,6 +156,7 @@ pub(crate) fn build(
                         Slider::new(&mut settings.bump, 0.0..=5.0).ui(ui);
 
                         ui.add_space(12.0);
+
                         ui.label("Shadows");
                         ui.checkbox(&mut settings.shadow, "");
                     });
