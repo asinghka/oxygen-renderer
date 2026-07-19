@@ -53,12 +53,9 @@ impl GridBindings {
         &self.bind_group_layout
     }
 
-    pub(crate) fn record_grid(&self, render_pass: &mut wgpu::RenderPass, bind_group_index: u32) {
+    pub(crate) fn record(&self, render_pass: &mut wgpu::RenderPass, bind_group_index: u32) {
         render_pass.set_bind_group(bind_group_index, self.grid_bind_group(), &[]);
         self.grid_buffer.record(render_pass);
-    }
-
-    pub(crate) fn record_subgrid(&self, render_pass: &mut wgpu::RenderPass, bind_group_index: u32) {
         render_pass.set_bind_group(bind_group_index, self.subgrid_bind_group(), &[]);
         self.subgrid_buffer.record(render_pass);
     }

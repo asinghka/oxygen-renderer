@@ -32,25 +32,25 @@ var<uniform> camera: Camera;
 var<uniform> settings: RenderSettings;
 
 @group(2) @binding(0)
-var<uniform> primitive: Primitive;
-
-@group(2) @binding(1)
-var tex_sampler: sampler;
-
-@group(2) @binding(2)
-var albedo_texel: texture_2d<f32>;
-
-@group(2) @binding(3)
-var normal_texel: texture_2d<f32>;
-
-@group(3) @binding(0)
 var<uniform> light: Light;
 
-@group(3) @binding(1)
+@group(2) @binding(1)
 var shadow_map_sampler: sampler_comparison;
 
-@group(3) @binding(2)
+@group(2) @binding(2)
 var shadow_map_texel: texture_depth_2d;
+
+@group(3) @binding(0)
+var<uniform> primitive: Primitive;
+
+@group(3) @binding(1)
+var tex_sampler: sampler;
+
+@group(3) @binding(2)
+var albedo_texel: texture_2d<f32>;
+
+@group(3) @binding(3)
+var normal_texel: texture_2d<f32>;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,

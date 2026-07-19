@@ -13,6 +13,9 @@ use crate::renderer::utils::{GridBindings, LightBinding, PrimitiveBindings, Unif
 use crate::scene::{Light, Model, Scene, Vertex};
 use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 
+const COLOR_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
+const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
+
 const SHADOW_MAP_SIZE: u32 = 2048;
 
 pub(crate) struct Renderer {
@@ -53,8 +56,8 @@ impl Renderer {
         let bind_group_layouts = &[
             Some(camera_uniform_binding.bind_group_layout()),
             Some(render_settings_uniform_binding.bind_group_layout()),
-            Some(primitive_bindings.bind_group_layout()),
             Some(light_binding.light_bind_group_layout()),
+            Some(primitive_bindings.bind_group_layout()),
         ];
 
         let shadow_map_bind_group_layouts = &[
@@ -80,16 +83,16 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn render(&mut self, scene: &Scene, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, viewport: &Viewport, settings: &RenderSettings) {
+    pub(crate) fn render(&self, scene: &Scene, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, viewport: &Viewport, settings: &RenderSettings) {
         self.render_settings_uniform_binding
             .write(&gpu.queue, bytemuck::bytes_of(&settings.uniform()));
         self.camera_uniform_binding.write(&gpu.queue, bytemuck::bytes_of(&scene.camera.uniform()));
         self.light_binding.write(&gpu.queue, bytemuck::bytes_of(&scene.light.uniform()));
 
-        let invisible = &scene.model.get_invisible_primitives();
+        let invisible = scene.model.get_invisible_primitives();
 
-        self.shadow_pass(encoder, invisible);
-        self.main_pass(encoder, invisible, viewport, settings);
+        self.shadow_pass(encoder, &invisible);
+        self.main_pass(encoder, &invisible, viewport, settings);
     }
 
     pub(crate) fn load(&mut self, gpu: &Gpu, model: &Model) {
@@ -158,8 +161,7 @@ impl Renderer {
         if settings.grid {
             render_pass.set_pipeline(&self.line_pipeline);
 
-            self.grid_bindings.record_grid(&mut render_pass, 1);
-            self.grid_bindings.record_subgrid(&mut render_pass, 1);
+            self.grid_bindings.record(&mut render_pass, 1);
         }
 
         let pipeline = if settings.wireframe {
@@ -170,9 +172,9 @@ impl Renderer {
         render_pass.set_pipeline(pipeline);
 
         render_pass.set_bind_group(1, self.render_settings_uniform_binding.bind_group(), &[]);
-        render_pass.set_bind_group(3, self.light_binding.light_bind_group(), &[]);
+        render_pass.set_bind_group(2, self.light_binding.light_bind_group(), &[]);
 
-        self.primitive_bindings.record(&mut render_pass, 2, invisible);
+        self.primitive_bindings.record(&mut render_pass, 3, invisible);
     }
 }
 
@@ -212,7 +214,7 @@ fn create_pipelines(
             conservative: false,
         },
         depth_stencil: Some(wgpu::DepthStencilState {
-            format: TextureFormat::Depth32Float,
+            format: DEPTH_FORMAT,
             depth_write_enabled: Some(true),
             depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: wgpu::StencilState::default(),
@@ -224,7 +226,7 @@ fn create_pipelines(
             entry_point: None,
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(wgpu::ColorTargetState {
-                format: TextureFormat::Rgba8UnormSrgb,
+                format: COLOR_FORMAT,
                 blend: None,
                 write_mask: Default::default(),
             })],
@@ -252,7 +254,7 @@ fn create_pipelines(
             conservative: false,
         },
         depth_stencil: Some(wgpu::DepthStencilState {
-            format: TextureFormat::Depth32Float,
+            format: DEPTH_FORMAT,
             depth_write_enabled: Some(true),
             depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: wgpu::StencilState::default(),
@@ -264,7 +266,7 @@ fn create_pipelines(
             entry_point: None,
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(wgpu::ColorTargetState {
-                format: TextureFormat::Rgba8UnormSrgb,
+                format: COLOR_FORMAT,
                 blend: None,
                 write_mask: Default::default(),
             })],
@@ -303,7 +305,7 @@ fn create_pipelines(
             conservative: false,
         },
         depth_stencil: Some(wgpu::DepthStencilState {
-            format: TextureFormat::Depth32Float,
+            format: DEPTH_FORMAT,
             depth_write_enabled: Some(true),
             depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: wgpu::StencilState::default(),
@@ -349,7 +351,7 @@ fn create_pipelines(
             conservative: false,
         },
         depth_stencil: Some(wgpu::DepthStencilState {
-            format: TextureFormat::Depth32Float,
+            format: DEPTH_FORMAT,
             depth_write_enabled: Some(true),
             depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: wgpu::StencilState::default(),
@@ -361,7 +363,7 @@ fn create_pipelines(
             entry_point: None,
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(wgpu::ColorTargetState {
-                format: TextureFormat::Rgba8UnormSrgb,
+                format: COLOR_FORMAT,
                 blend: None,
                 write_mask: Default::default(),
             })],
