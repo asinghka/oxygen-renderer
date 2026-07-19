@@ -138,15 +138,15 @@ fn build_bindings(
     let mut primitive_buffers = Vec::new();
     let mut primitive_bind_groups = Vec::new();
 
-    for primitive in &model.primitives {
+    for (i, primitive) in model.primitives.iter().enumerate() {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("vertex-buffer"),
+            label: Some(&format!("vertex-buffer-{i}")),
             contents: bytemuck::cast_slice(&primitive.vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("index-buffer"),
+            label: Some(&format!("index-buffer-{i}")),
             contents: bytemuck::cast_slice(&primitive.indices),
             usage: wgpu::BufferUsages::INDEX,
         });
@@ -160,7 +160,7 @@ fn build_bindings(
         });
 
         let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("primitive-buffer"),
+            label: Some(&format!("primitive-uniform-buffer-{i}")),
             contents: bytemuck::bytes_of(&primitive.uniform()),
             usage: wgpu::BufferUsages::UNIFORM,
         });
@@ -176,7 +176,7 @@ fn build_bindings(
             .unwrap_or(placeholder_view);
 
         let primitive_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("primitive-bind-group"),
+            label: Some(&format!("primitive-bind-group-{i}")),
             layout: bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -208,7 +208,8 @@ fn create_texture_views(gpu: &Gpu, model: &Model) -> Vec<Option<wgpu::TextureVie
     model
         .textures
         .iter()
-        .map(|tex_data| {
+        .enumerate()
+        .map(|(i, tex_data)| {
             let tex_data = tex_data.as_ref()?;
 
             let size = wgpu::Extent3d {
@@ -224,7 +225,7 @@ fn create_texture_views(gpu: &Gpu, model: &Model) -> Vec<Option<wgpu::TextureVie
             };
 
             let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("scene-texture"),
+                label: Some(&format!("scene-texture-{i}")),
                 size,
                 mip_level_count: 1,
                 sample_count: 1,
