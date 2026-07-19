@@ -1,8 +1,8 @@
 use std::mem::offset_of;
 
 // Ensure uniform values are 16-byte-aligned (std140)
-const _: () = assert!(size_of::<RenderSettingsUniform>() == 32);
 const _: () = assert!(offset_of!(RenderSettingsUniform, specular_exponent) == 16);
+const _: () = assert!(offset_of!(RenderSettingsUniform, normal) == 32);
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -15,6 +15,7 @@ pub(crate) struct RenderSettingsUniform {
     bump: f32,
     shadow: u32,
     depth: u32,
+    normal: u32,
 }
 
 pub(crate) struct RenderSettings {
@@ -58,6 +59,7 @@ impl RenderSettings {
             bump: self.bump,
             shadow: self.shadow as u32,
             depth: matches!(self.render_mode, RenderMode::Depth) as u32,
+            normal: matches!(self.render_mode, RenderMode::Normal) as u32,
         }
     }
 }

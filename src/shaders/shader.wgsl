@@ -12,6 +12,7 @@ struct RenderSettings {
     bump: f32,
     shadow: u32,
     depth: u32,
+    normal: u32,
 }
 
 struct Light {
@@ -95,9 +96,14 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     let uv = in.uv;
+    let normal = apply_normal_map(in.normal, in.tangent, uv);
+
+    if settings.normal == 1u {
+        return normal_color(normal);
+    }
+
     let albedo = textureSample(albedo_texel, tex_sampler, uv).rgb * primitive.color;
 
-    let normal = apply_normal_map(in.normal, in.tangent, uv);
     let shadow = sample_shadow(in.light_pos);
     let color = blinn_phong_lighting(normal, light.direction, camera.eye, in.world_pos, albedo, shadow);
 
@@ -175,4 +181,8 @@ fn depth_color(clip_pos: vec4<f32>) -> vec4<f32> {
     let z = clip_pos.z;
     let t = (near * z) / (far - z * (far - near));
     return vec4<f32>(t, t, t, 1.0);
+}
+
+fn normal_color(normal: vec3<f32>) -> vec4<f32> {
+    return vec4<f32>(0.5 * normal + 0.5, 1.0);
 }
