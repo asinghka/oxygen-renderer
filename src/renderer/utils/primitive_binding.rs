@@ -118,7 +118,7 @@ impl PrimitiveBindings {
             .iter()
             .zip(self.bind_groups.iter())
             .enumerate()
-            .filter(|(i, (_, _))| !invisible.contains(i))
+            .filter(|(i, _)| !invisible.contains(i))
             .map(|(_, (buf, bg))| (buf, bg))
     }
 
