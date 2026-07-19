@@ -158,24 +158,21 @@ impl Renderer {
         if settings.grid {
             render_pass.set_pipeline(&self.line_pipeline);
 
-            self.grid_bindings.record_grid(&mut render_pass);
-            self.grid_bindings.record_subgrid(&mut render_pass);
+            self.grid_bindings.record_grid(&mut render_pass, 1);
+            self.grid_bindings.record_subgrid(&mut render_pass, 1);
         }
 
-        if settings.wireframe {
-            render_pass.set_pipeline(&self.wireframe_pipeline);
+        let pipeline = if settings.wireframe {
+            &self.wireframe_pipeline
         } else {
-            render_pass.set_pipeline(&self.render_pipeline);
-        }
+            &self.render_pipeline
+        };
+        render_pass.set_pipeline(pipeline);
 
         render_pass.set_bind_group(1, self.render_settings_uniform_binding.bind_group(), &[]);
         render_pass.set_bind_group(3, self.light_binding.light_bind_group(), &[]);
 
-        for (primitive_buffer, primitive_bind_group) in self.primitive_bindings.visible(invisible) {
-            render_pass.set_bind_group(2, primitive_bind_group, &[]);
-
-            primitive_buffer.record(&mut render_pass);
-        }
+        self.primitive_bindings.record(&mut render_pass, 2, invisible);
     }
 }
 

@@ -105,6 +105,14 @@ impl PrimitiveBindings {
         self.bind_groups = primitive_bind_groups;
     }
 
+    pub(crate) fn record(&self, render_pass: &mut wgpu::RenderPass, bind_group_index: u32, invisible: &HashSet<usize>) {
+        for (primitive_buffer, primitive_bind_group) in self.visible(invisible) {
+            render_pass.set_bind_group(bind_group_index, primitive_bind_group, &[]);
+
+            primitive_buffer.record(render_pass);
+        }
+    }
+
     pub(crate) fn visible(&self, invisible: &HashSet<usize>) -> impl Iterator<Item = (&PrimitiveBuffer, &wgpu::BindGroup)> {
         self.buffers
             .iter()
