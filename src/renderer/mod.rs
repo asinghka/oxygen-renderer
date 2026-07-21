@@ -11,7 +11,7 @@ pub(crate) use viewport::*;
 use crate::camera::Camera;
 use crate::renderer::utils::{GridBindings, LightBinding, PrimitiveBindings, UniformBinding};
 use crate::scene::{Light, Model, Scene, Vertex};
-use wgpu::{Color, Device, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
+use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 
 const COLOR_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
 const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
@@ -109,7 +109,7 @@ impl Renderer {
         self.primitive_bindings.update_from_model(gpu, model);
     }
 
-    fn shadow_pass(&mut self, device: &Device, encoder: &mut wgpu::CommandEncoder, invisible: &HashSet<usize>, settings: &RenderSettings) {
+    fn shadow_pass(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, invisible: &HashSet<usize>, settings: &RenderSettings) {
         if settings.shadow_map_resolution != self.light_binding.current_shadow_map_resolution() {
             self.light_binding.update_shadow_map(device, settings.shadow_map_resolution);
         }
