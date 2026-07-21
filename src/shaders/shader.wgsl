@@ -174,8 +174,8 @@ fn apply_normal_map(normal: vec3<f32>, tangent: vec4<f32>, uv: vec2<f32>) -> vec
     return normalize(tangent_to_world * scaled_tangent_space_normal);
 }
 
-// Inverse of the sRGB OETF the target applies on write. Debug modes output data, not
-// light, so pre-cancelling the encode lets the value reach the stored byte unchanged.
+// Inverse of the sRGB OETF the target applies on write.
+// Debug modes output data, not light
 fn linear_from_gamma(s: vec3<f32>) -> vec3<f32> {
     let lower = s / 12.92;
     let higher = pow((s + 0.055) / 1.055, vec3<f32>(2.4));
