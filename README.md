@@ -4,7 +4,9 @@ A real-time [glTF](https://www.khronos.org/gltf/) viewer and renderer built from
 renderer as a small game-engine editor: load a model, inspect its scene graph, fly through the
 viewport, and tune its shading live.
 
-![Oxygen rendering a dragon model](assets/media/dragon-demo.gif)
+<p align="center">
+  <img src="assets/media/dragon-demo.gif" alt="Oxygen rendering a dragon model">
+</p>
 
 ## How it works
 
