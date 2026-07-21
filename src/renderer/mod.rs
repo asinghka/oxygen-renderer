@@ -16,7 +16,7 @@ use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 const COLOR_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
 const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
-const SHADOW_MAP_SIZE: u32 = 2048;
+const SHADOW_MAP_SIZE: u32 = 4096;
 
 pub(crate) struct Renderer {
     render_pipeline: wgpu::RenderPipeline,
@@ -142,7 +142,7 @@ impl Renderer {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main-render-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &viewport.texture_view,
+                view: &viewport.attachment_view,
                 depth_slice: None,
                 resolve_target: None,
                 ops: Operations {

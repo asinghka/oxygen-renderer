@@ -28,14 +28,14 @@ impl Primitive {
         let step = size / divisions as f32;
         let offsets = (0..=divisions).map(|n| -size / 2.0 + n as f32 * step);
 
-        Self::grid_lines(size, offsets, [0.5, 0.5, 0.5])
+        Self::grid_lines(size, offsets, [0.25, 0.25, 0.25])
     }
 
     pub(crate) fn subgrid(size: f32, divisions: u32) -> Self {
         let step = size / divisions as f32;
         let offsets = (0..divisions).map(|n| -size / 2.0 + (n as f32 + 0.5) * step);
 
-        Self::grid_lines(size, offsets, [0.2, 0.2, 0.2])
+        Self::grid_lines(size, offsets, [0.1, 0.1, 0.1])
     }
 
     fn grid_lines(size: f32, offsets: impl Iterator<Item = f32>, color: [f32; 3]) -> Self {

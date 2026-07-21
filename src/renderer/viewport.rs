@@ -6,14 +6,15 @@ pub(crate) struct Viewport {
     pub(crate) height: u32,
 
     pub(crate) texture_id: egui::TextureId,
-    pub(crate) texture_view: wgpu::TextureView,
+    pub(crate) attachment_view: wgpu::TextureView,
+    pub(crate) egui_view: wgpu::TextureView,
     pub(crate) depth_texture_view: wgpu::TextureView,
 }
 
 impl Viewport {
     pub(crate) fn new(device: &wgpu::Device, gui: &mut Gui, width: u32, height: u32) -> Self {
-        let texture_view = Self::create_texture_view(device, width, height);
-        let texture_id = gui.renderer.register_native_texture(device, &texture_view, wgpu::FilterMode::Linear);
+        let (attachment_view, egui_view) = Self::create_texture_view(device, width, height);
+        let texture_id = gui.renderer.register_native_texture(device, &attachment_view, wgpu::FilterMode::Linear);
 
         let depth_texture_view = Self::create_depth_texture_view(device, width, height);
 
@@ -21,7 +22,8 @@ impl Viewport {
             width,
             height,
             texture_id,
-            texture_view,
+            attachment_view,
+            egui_view,
             depth_texture_view,
         }
     }
@@ -37,14 +39,18 @@ impl Viewport {
         self.width = width;
         self.height = height;
 
-        self.texture_view = Self::create_texture_view(device, self.width, self.height);
+        let (attachment_view, egui_view) = Self::create_texture_view(device, self.width, self.height);
+
+        self.attachment_view = attachment_view;
+        self.egui_view = egui_view;
+
         gui.renderer
-            .update_egui_texture_from_wgpu_texture(device, &self.texture_view, wgpu::FilterMode::Linear, self.texture_id);
+            .update_egui_texture_from_wgpu_texture(device, &self.egui_view, wgpu::FilterMode::Linear, self.texture_id);
 
         self.depth_texture_view = Self::create_depth_texture_view(device, self.width, self.height);
     }
 
-    fn create_texture_view(device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
+    fn create_texture_view(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::TextureView, wgpu::TextureView) {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("viewport-texture"),
             size: Extent3d {
@@ -57,10 +63,16 @@ impl Viewport {
             dimension: TextureDimension::D2,
             format: TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
+            view_formats: &[TextureFormat::Rgba8Unorm],
         });
 
-        texture.create_view(&wgpu::TextureViewDescriptor::default())
+        let attachment_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let egui_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(TextureFormat::Rgba8Unorm),
+            ..Default::default()
+        });
+
+        (attachment_view, egui_view)
     }
 
     fn create_depth_texture_view(device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {

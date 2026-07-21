@@ -35,7 +35,7 @@ impl Light {
         LightUniform {
             direction: direction.to_array(),
             _pad: 0.0,
-            view_orthographic_matrix: self.view_orthographic_matrix(20.0, 10.0).to_cols_array_2d(),
+            view_orthographic_matrix: self.view_orthographic_matrix(10.0, 10.0).to_cols_array_2d(),
         }
     }
 

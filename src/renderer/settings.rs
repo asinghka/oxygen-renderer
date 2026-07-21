@@ -41,7 +41,7 @@ impl Default for RenderSettings {
             shininess: 0.7,
             bump: 1.0,
             shadow: true,
-            background: [0.08; 3],
+            background: [0.008; 3],
             render_mode: RenderMode::Color,
             grid: true,
         }
