@@ -1,4 +1,3 @@
-use crate::renderer::SHADOW_MAP_SIZE;
 use crate::scene::Light;
 use wgpu::util::DeviceExt;
 use wgpu::wgt::SamplerDescriptor;
@@ -11,11 +10,28 @@ pub(crate) struct LightBinding {
     shadow_map_bind_group_layout: wgpu::BindGroupLayout,
     shadow_map_bind_group: wgpu::BindGroup,
     shadow_map_texture_view: wgpu::TextureView,
+    shadow_map_sampler: wgpu::Sampler,
+    current_shadow_map_resolution: u32,
 }
 
 impl LightBinding {
-    pub(crate) fn new(device: &wgpu::Device, light: &Light) -> Self {
-        let (shadow_map_texture_view, shadow_map_sampler) = create_shadow_map(device);
+    pub(crate) fn new(device: &wgpu::Device, light: &Light, resolution: u32) -> Self {
+        let shadow_map_sampler = device.create_sampler(&SamplerDescriptor {
+            label: Some("shadow-map-sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 0.0,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            anisotropy_clamp: 1,
+            border_color: None,
+        });
+
+        let shadow_map_texture_view = create_shadow_map(device, resolution);
 
         let light_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("light-uniform-buffer"),
@@ -104,6 +120,8 @@ impl LightBinding {
             shadow_map_bind_group_layout,
             shadow_map_bind_group,
             shadow_map_texture_view,
+            shadow_map_sampler,
+            current_shadow_map_resolution: resolution,
         }
     }
 
@@ -127,18 +145,49 @@ impl LightBinding {
         &self.shadow_map_texture_view
     }
 
+    pub(crate) fn current_shadow_map_resolution(&self) -> u32 {
+        self.current_shadow_map_resolution
+    }
+
+    pub(crate) fn update_shadow_map(&mut self, device: &wgpu::Device, resolution: u32) {
+        let shadow_map_texture_view = create_shadow_map(device, resolution);
+
+        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("light-bind-group"),
+            layout: &self.light_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.light_uniform_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.shadow_map_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&shadow_map_texture_view),
+                },
+            ],
+        });
+
+        self.light_bind_group = light_bind_group;
+        self.shadow_map_texture_view = shadow_map_texture_view;
+        self.current_shadow_map_resolution = resolution;
+    }
+
     pub(crate) fn write(&self, queue: &wgpu::Queue, data: &[u8]) {
         debug_assert_eq!(data.len() as u64, self.light_uniform_buffer.size());
         queue.write_buffer(&self.light_uniform_buffer, 0, data);
     }
 }
 
-fn create_shadow_map(device: &wgpu::Device) -> (wgpu::TextureView, wgpu::Sampler) {
+fn create_shadow_map(device: &wgpu::Device, resolution: u32) -> wgpu::TextureView {
     let shadow_map_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("shadow-map-texture"),
         size: wgpu::Extent3d {
-            width: SHADOW_MAP_SIZE,
-            height: SHADOW_MAP_SIZE,
+            width: resolution,
+            height: resolution,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
@@ -149,22 +198,5 @@ fn create_shadow_map(device: &wgpu::Device) -> (wgpu::TextureView, wgpu::Sampler
         view_formats: &[],
     });
 
-    let shadow_map_sampler = device.create_sampler(&SamplerDescriptor {
-        label: Some("shadow-map-sampler"),
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::MipmapFilterMode::Linear,
-        lod_min_clamp: 0.0,
-        lod_max_clamp: 0.0,
-        compare: Some(wgpu::CompareFunction::LessEqual),
-        anisotropy_clamp: 1,
-        border_color: None,
-    });
-
-    let shadow_map_texture_view = shadow_map_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-    (shadow_map_texture_view, shadow_map_sampler)
+    shadow_map_texture.create_view(&wgpu::TextureViewDescriptor::default())
 }

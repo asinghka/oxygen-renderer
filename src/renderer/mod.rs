@@ -11,12 +11,10 @@ pub(crate) use viewport::*;
 use crate::camera::Camera;
 use crate::renderer::utils::{GridBindings, LightBinding, PrimitiveBindings, UniformBinding};
 use crate::scene::{Light, Model, Scene, Vertex};
-use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
+use wgpu::{Color, Device, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 
 const COLOR_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
 const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
-
-const SHADOW_MAP_SIZE: u32 = 4096;
 
 pub(crate) struct Renderer {
     render_pipeline: wgpu::RenderPipeline,
@@ -51,10 +49,10 @@ impl Renderer {
             wgpu::ShaderStages::VERTEX_FRAGMENT,
         );
 
-        let light_binding = LightBinding::new(&gpu.device, light);
+        let light_binding = LightBinding::new(&gpu.device, light, settings.shadow_map_resolution);
 
         // Primitive bind group at the highest index as this changed per draw call
-        // potentially invalidating bind groups higher than it
+        // invalidating bind groups next to it
         let bind_group_layouts = &[
             Some(camera_uniform_binding.bind_group_layout()),
             Some(render_settings_uniform_binding.bind_group_layout()),
@@ -95,7 +93,7 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn render(&self, scene: &Scene, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, viewport: &Viewport, settings: &RenderSettings) {
+    pub(crate) fn render(&mut self, scene: &Scene, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, viewport: &Viewport, settings: &RenderSettings) {
         self.render_settings_uniform_binding
             .write(&gpu.queue, bytemuck::bytes_of(&settings.uniform()));
         self.camera_uniform_binding.write(&gpu.queue, bytemuck::bytes_of(&scene.camera.uniform()));
@@ -103,7 +101,7 @@ impl Renderer {
 
         let invisible = scene.model.get_invisible_primitives();
 
-        self.shadow_pass(encoder, &invisible);
+        self.shadow_pass(&gpu.device, encoder, &invisible, settings);
         self.main_pass(encoder, &invisible, viewport, settings);
     }
 
@@ -111,7 +109,11 @@ impl Renderer {
         self.primitive_bindings.update_from_model(gpu, model);
     }
 
-    fn shadow_pass(&self, encoder: &mut wgpu::CommandEncoder, invisible: &HashSet<usize>) {
+    fn shadow_pass(&mut self, device: &Device, encoder: &mut wgpu::CommandEncoder, invisible: &HashSet<usize>, settings: &RenderSettings) {
+        if settings.shadow_map_resolution != self.light_binding.current_shadow_map_resolution() {
+            self.light_binding.update_shadow_map(device, settings.shadow_map_resolution);
+        }
+
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow-map-render-pass"),
             color_attachments: &[],

@@ -161,11 +161,20 @@ pub(crate) fn build(
 
                         ui.label("Bump strength");
                         Slider::new(&mut settings.bump, 0.0..=5.0).ui(ui);
+                    });
 
-                        ui.add_space(12.0);
+                    ui.add_space(12.0);
 
-                        ui.label("Shadows");
+                    CollapsingHeader::new("Shadows").show(ui, |ui| {
+                        ui.label("Shadow Map");
                         ui.checkbox(&mut settings.shadow, "");
+
+                        ui.label("Resolution");
+                        let mut exponent = settings.shadow_map_resolution.trailing_zeros();
+                        Slider::new(&mut exponent, 7..=13)
+                            .custom_formatter(|n, _| (1u32 << n as u32).to_string())
+                            .ui(ui);
+                        settings.shadow_map_resolution = 1 << exponent;
                     });
 
                     ui.add_space(12.0);
