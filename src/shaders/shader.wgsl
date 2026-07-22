@@ -11,6 +11,8 @@ struct RenderSettings {
     specular_exponent: f32,
     bump: f32,
     shadow: u32,
+    shadow_map_resolution: f32,
+    pcf: u32,
     depth: u32,
     normal: u32,
 }
@@ -142,15 +144,29 @@ fn specular(camera_eye: vec3<f32>, light_dir: vec3<f32>, normal: vec3<f32>, n_do
 }
 
 fn sample_shadow(light_space_pos: vec4<f32>) -> f32 {
+    if (settings.shadow == 0u) {
+        return 1.0;
+    }
+
     let ndc = light_space_pos.xyz / light_space_pos.w;
     let uv  = ndc.xy * vec2(0.5, -0.5) + vec2(0.5, 0.5);
 
-    var shadow = 1.0;
-    if (all(uv >= vec2(0.0)) && all(uv <= vec2(1.0)) && ndc.z <= 1.0 && settings.shadow == 1u) {
-        shadow = textureSampleCompareLevel(shadow_map_texel, shadow_map_sampler, uv, ndc.z);
+    var shadow = 0.0;
+    var count = 0.0;
+
+    let samples = f32(settings.pcf);
+    for (var y = -1.5 * samples; y <= 1.5 * samples; y += 1.0) {
+        for (var x = -1.5 * samples; x <= 1.5 * samples; x += 1.0) {
+            count += 1.0;
+            let resolution = settings.shadow_map_resolution;
+            let uv_offset = uv + vec2(x / resolution, y / resolution);
+            if (all(uv_offset >= vec2(0.0)) && all(uv_offset <= vec2(1.0)) && ndc.z <= 1.0) {
+                shadow += textureSampleCompareLevel(shadow_map_texel, shadow_map_sampler, uv_offset, ndc.z);
+            }
+        }
     }
 
-    return shadow;
+    return shadow / count;
 }
 
 fn apply_normal_map(normal: vec3<f32>, tangent: vec4<f32>, uv: vec2<f32>) -> vec3<f32> {

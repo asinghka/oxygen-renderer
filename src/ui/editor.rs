@@ -169,12 +169,19 @@ pub(crate) fn build(
                         ui.label("Shadow Map");
                         ui.checkbox(&mut settings.shadow, "");
 
+                        ui.add_space(12.0);
+
                         ui.label("Resolution");
                         let mut exponent = settings.shadow_map_resolution.trailing_zeros();
                         Slider::new(&mut exponent, 7..=13)
                             .custom_formatter(|n, _| (1u32 << n as u32).to_string())
                             .ui(ui);
                         settings.shadow_map_resolution = 1 << exponent;
+
+                        ui.add_space(12.0);
+
+                        ui.label("Percentage Close Filtering");
+                        ui.checkbox(&mut settings.pcf, "");
                     });
 
                     ui.add_space(12.0);

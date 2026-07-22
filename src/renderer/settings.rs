@@ -2,7 +2,7 @@ use std::mem::offset_of;
 
 // Ensure uniform values are 16-byte-aligned (std140)
 const _: () = assert!(offset_of!(RenderSettingsUniform, specular_exponent) == 16);
-const _: () = assert!(offset_of!(RenderSettingsUniform, normal) == 32);
+const _: () = assert!(offset_of!(RenderSettingsUniform, pcf) == 32);
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -14,6 +14,8 @@ pub(crate) struct RenderSettingsUniform {
     specular_exponent: f32,
     bump: f32,
     shadow: u32,
+    shadow_map_resolution: f32,
+    pcf: u32,
     depth: u32,
     normal: u32,
 }
@@ -27,6 +29,7 @@ pub(crate) struct RenderSettings {
     pub(crate) bump: f32,
     pub(crate) shadow: bool,
     pub(crate) shadow_map_resolution: u32,
+    pub(crate) pcf: bool,
     pub(crate) background: [f32; 3],
     pub(crate) render_mode: RenderMode,
     pub(crate) grid: bool,
@@ -43,6 +46,7 @@ impl Default for RenderSettings {
             bump: 1.0,
             shadow: true,
             shadow_map_resolution: 4096,
+            pcf: true,
             background: [0.008; 3],
             render_mode: RenderMode::Color,
             grid: true,
@@ -60,6 +64,8 @@ impl RenderSettings {
             specular_exponent: self.shininess * 256.0,
             bump: self.bump,
             shadow: self.shadow as u32,
+            shadow_map_resolution: self.shadow_map_resolution as f32,
+            pcf: self.pcf as u32,
             depth: matches!(self.render_mode, RenderMode::Depth) as u32,
             normal: matches!(self.render_mode, RenderMode::Normal) as u32,
         }
