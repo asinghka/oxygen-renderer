@@ -180,8 +180,14 @@ pub(crate) fn build(
 
                         ui.add_space(12.0);
 
-                        ui.label("Percentage Close Filtering");
-                        ui.checkbox(&mut settings.pcf, "");
+                        ui.label("PCF Samples");
+                        Slider::new(&mut settings.pcf, 0..=6)
+                            .step_by(2.0)
+                            .custom_formatter(|n, _| {
+                                let samples = (n as u32 + 1) * (n as u32 + 1);
+                                if samples == 1 { String::from("1 (Off)") } else { samples.to_string() }
+                            })
+                            .ui(ui);
                     });
 
                     ui.add_space(12.0);
