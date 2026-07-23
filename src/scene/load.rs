@@ -1,4 +1,4 @@
-use crate::scene::{Model, ModelNode, Primitive, TextureData, Vertex};
+use crate::scene::{Material, Model, ModelNode, Primitive, TextureData, Vertex};
 use gltf::Node;
 use gltf::buffer::Data;
 use gltf::image::Format;
@@ -27,6 +27,23 @@ pub(crate) fn load(path: String) -> Model {
 
         root_indices.push(root_index);
     }
+
+    let materials = document
+        .materials()
+        .map(|m| {
+            let normal_texture = m.normal_texture();
+
+            Material {
+                color: m.pbr_metallic_roughness().base_color_factor(),
+                albedo_texture: m
+                    .pbr_metallic_roughness()
+                    .base_color_texture()
+                    .map(|info| info.texture().source().index()),
+                normal_texture: normal_texture.as_ref().map(|t| t.texture().source().index()),
+                bump: normal_texture.as_ref().map(|nt| nt.scale()).unwrap_or(0.0),
+            }
+        })
+        .collect();
 
     let mut linear_images = HashSet::new();
     for material in document.materials() {
@@ -74,6 +91,7 @@ pub(crate) fn load(path: String) -> Model {
         model_nodes: scene_nodes,
         root_indices,
         primitives,
+        materials,
         textures,
     }
 }
@@ -123,25 +141,13 @@ fn visit(
                 indices.push(i);
             }
 
-            let [r, g, b, _] = primitive.material().pbr_metallic_roughness().base_color_factor();
-            let albedo_texture = primitive
-                .material()
-                .pbr_metallic_roughness()
-                .base_color_texture()
-                .map(|info| info.texture().source().index());
-
-            let normal_texture = primitive.material().normal_texture();
-            let bump = normal_texture.as_ref().map(|nt| nt.scale()).unwrap_or(0.0);
-            let normal_texture = normal_texture.as_ref().map(|nt| nt.texture().source().index());
+            let material = primitive.material().index();
 
             primitives.push(Primitive {
                 vertices,
                 indices,
                 model,
-                color: [r, g, b],
-                albedo_texture,
-                normal_texture,
-                bump,
+                material,
             })
         }
     }

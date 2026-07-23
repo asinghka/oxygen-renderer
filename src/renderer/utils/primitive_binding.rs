@@ -165,15 +165,21 @@ fn build_bindings(
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
-        let albedo_texture_view = primitive
-            .albedo_texture
-            .and_then(|index| texture_views[index].as_ref())
-            .unwrap_or(placeholder_view);
+        let albedo_texture_index = primitive.material.and_then(|index| model.materials[index].albedo_texture);
 
-        let normal_texture_view = primitive
-            .normal_texture
-            .and_then(|index| texture_views[index].as_ref())
-            .unwrap_or(placeholder_view);
+        let albedo_texture_view = if let Some(index) = albedo_texture_index {
+            texture_views[index].as_ref().unwrap_or(placeholder_view)
+        } else {
+            placeholder_view
+        };
+
+        let normal_texture_index = primitive.material.and_then(|index| model.materials[index].normal_texture);
+
+        let normal_texture_view = if let Some(index) = normal_texture_index {
+            texture_views[index].as_ref().unwrap_or(placeholder_view)
+        } else {
+            placeholder_view
+        };
 
         let primitive_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(&format!("primitive-bind-group-{i}")),
@@ -189,11 +195,11 @@ fn build_bindings(
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(albedo_texture_view),
+                    resource: wgpu::BindingResource::TextureView(&albedo_texture_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::TextureView(normal_texture_view),
+                    resource: wgpu::BindingResource::TextureView(&normal_texture_view),
                 },
             ],
         });
