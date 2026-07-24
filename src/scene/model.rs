@@ -1,4 +1,4 @@
-use crate::scene::{Primitive, TextureData};
+use crate::scene::{Material, Primitive, TextureData};
 use std::collections::HashSet;
 
 #[derive(Debug)]
@@ -34,6 +34,7 @@ pub(crate) struct Model {
     pub(crate) model_nodes: Vec<ModelNode>,
     pub(crate) primitives: Vec<Primitive>,
     pub(crate) root_indices: Vec<usize>,
+    pub(crate) materials: Vec<Material>,
     pub(crate) textures: Vec<Option<TextureData>>,
 }
 

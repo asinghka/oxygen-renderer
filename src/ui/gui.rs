@@ -57,7 +57,7 @@ impl Gui {
         let raw_input = self.winit_state.take_egui_input(window);
         let full_output = self.context.run_ui(raw_input, build);
         self.winit_state.handle_platform_output(window, full_output.platform_output);
-        let clipped_primitives = self.context.tessellate(full_output.shapes, full_output.pixels_per_point);
+        let clipped_meshes = self.context.tessellate(full_output.shapes, full_output.pixels_per_point);
 
         for (id, delta) in &full_output.textures_delta.set {
             self.renderer.update_texture(device, queue, *id, delta);
@@ -69,8 +69,7 @@ impl Gui {
             pixels_per_point: full_output.pixels_per_point,
         };
 
-        self.renderer
-            .update_buffers(device, queue, encoder, &clipped_primitives, &screen_descriptor);
+        self.renderer.update_buffers(device, queue, encoder, &clipped_meshes, &screen_descriptor);
 
         {
             let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -91,7 +90,7 @@ impl Gui {
             });
 
             self.renderer
-                .render(&mut render_pass.forget_lifetime(), &clipped_primitives, &screen_descriptor);
+                .render(&mut render_pass.forget_lifetime(), &clipped_meshes, &screen_descriptor);
 
             for id in &full_output.textures_delta.free {
                 self.renderer.free_texture(id);

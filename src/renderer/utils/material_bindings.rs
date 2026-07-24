@@ -1,31 +1,29 @@
 use crate::renderer::Gpu;
-use crate::renderer::utils::PrimitiveBuffer;
-use crate::scene::Model;
-use std::collections::HashSet;
-use wgpu::util::{DeviceExt, TextureDataOrder};
+use crate::scene::{Material, Model};
+use wgpu::util::{BufferInitDescriptor, DeviceExt, TextureDataOrder};
 use wgpu::wgt::SamplerDescriptor;
 use wgpu::{TexelCopyBufferLayout, TextureDimension, TextureFormat, TextureUsages};
 
-pub(crate) struct PrimitiveBindings {
-    buffers: Vec<PrimitiveBuffer>,
-
-    bind_groups: Vec<wgpu::BindGroup>,
+pub(crate) struct MaterialBindings {
+    material_uniform_buffers: Vec<wgpu::Buffer>,
     bind_group_layout: wgpu::BindGroupLayout,
+    material_bind_groups: Vec<wgpu::BindGroup>,
 
-    texture_sampler: wgpu::Sampler,
     texture_views: Vec<Option<wgpu::TextureView>>,
+    placeholder_texture_view: wgpu::TextureView,
+    texture_sampler: wgpu::Sampler,
 
-    placeholder_view: wgpu::TextureView,
+    placeholder_bind_group: wgpu::BindGroup,
 }
 
-impl PrimitiveBindings {
+impl MaterialBindings {
     pub(crate) fn new(gpu: &Gpu) -> Self {
         let bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("primitive-bind-group-layout"),
+            label: Some("material-bind-group-layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -36,7 +34,11 @@ impl PrimitiveBindings {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
@@ -52,11 +54,7 @@ impl PrimitiveBindings {
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
             ],
@@ -77,131 +75,106 @@ impl PrimitiveBindings {
             border_color: None,
         });
 
-        let placeholder_view = create_placeholder_texture(gpu);
+        let placeholder_texture_view = create_placeholder_texture(gpu);
+
+        let placeholder_bind_group = build_placeholder_bindings(&gpu.device, &bind_group_layout, &placeholder_texture_view, &texture_sampler);
 
         Self {
-            buffers: Vec::new(),
-            bind_groups: Vec::new(),
+            material_uniform_buffers: Vec::new(),
             bind_group_layout,
-            texture_sampler,
+            material_bind_groups: Vec::new(),
             texture_views: Vec::new(),
-            placeholder_view,
+            placeholder_texture_view,
+            texture_sampler,
+            placeholder_bind_group,
         }
     }
 
     pub(crate) fn update_from_model(&mut self, gpu: &Gpu, model: &Model) {
         self.texture_views = create_texture_views(gpu, model);
 
-        let (primitive_buffers, primitive_bind_groups) = build_bindings(
+        let (material_uniform_buffers, material_bind_groups) = build_bindings(
             &gpu.device,
             &self.bind_group_layout,
+            model,
             &self.texture_views,
             &self.texture_sampler,
-            &self.placeholder_view,
-            model,
+            &self.placeholder_texture_view,
         );
-
-        self.buffers = primitive_buffers;
-        self.bind_groups = primitive_bind_groups;
-    }
-
-    pub(crate) fn record(&self, render_pass: &mut wgpu::RenderPass, bind_group_index: u32, invisible: &HashSet<usize>) {
-        for (primitive_buffer, primitive_bind_group) in self.visible(invisible) {
-            render_pass.set_bind_group(bind_group_index, primitive_bind_group, &[]);
-
-            primitive_buffer.record(render_pass);
-        }
-    }
-
-    pub(crate) fn visible(&self, invisible: &HashSet<usize>) -> impl Iterator<Item = (&PrimitiveBuffer, &wgpu::BindGroup)> {
-        self.buffers
-            .iter()
-            .zip(self.bind_groups.iter())
-            .enumerate()
-            .filter(|(i, _)| !invisible.contains(i))
-            .map(|(_, (buf, bg))| (buf, bg))
+        self.material_uniform_buffers = material_uniform_buffers;
+        self.material_bind_groups = material_bind_groups;
     }
 
     pub(crate) fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout
+    }
+
+    pub(crate) fn bind_group(&self, index: Option<usize>) -> &wgpu::BindGroup {
+        if let Some(index) = index {
+            &self.material_bind_groups[index]
+        } else {
+            &self.placeholder_bind_group
+        }
     }
 }
 
 fn build_bindings(
     device: &wgpu::Device,
     bind_group_layout: &wgpu::BindGroupLayout,
+    model: &Model,
     texture_views: &[Option<wgpu::TextureView>],
     texture_sampler: &wgpu::Sampler,
-    placeholder_view: &wgpu::TextureView,
-    model: &Model,
-) -> (Vec<PrimitiveBuffer>, Vec<wgpu::BindGroup>) {
-    let mut primitive_buffers = Vec::new();
-    let mut primitive_bind_groups = Vec::new();
+    placeholder_texture_view: &wgpu::TextureView,
+) -> (Vec<wgpu::Buffer>, Vec<wgpu::BindGroup>) {
+    let mut material_buffers = Vec::new();
+    let mut material_bind_groups = Vec::new();
 
-    for (i, primitive) in model.primitives.iter().enumerate() {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&format!("vertex-buffer-{i}")),
-            contents: bytemuck::cast_slice(&primitive.vertices),
-            usage: wgpu::BufferUsages::VERTEX,
+    for (i, material) in model.materials.iter().enumerate() {
+        let material_uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some(&format!("material-buffer-{}", i)),
+            contents: bytemuck::bytes_of(&material.uniform()),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&format!("index-buffer-{i}")),
-            contents: bytemuck::cast_slice(&primitive.indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let albedo_texture_view = if let Some(index) = material.albedo_texture {
+            texture_views[index].as_ref().unwrap_or(placeholder_texture_view)
+        } else {
+            placeholder_texture_view
+        };
 
-        let num_indices = primitive.indices.len() as u32;
+        let normal_texture_view = if let Some(index) = material.normal_texture {
+            texture_views[index].as_ref().unwrap_or(placeholder_texture_view)
+        } else {
+            placeholder_texture_view
+        };
 
-        primitive_buffers.push(PrimitiveBuffer {
-            vertex_buffer,
-            index_buffer,
-            num_indices,
-        });
-
-        let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&format!("primitive-uniform-buffer-{i}")),
-            contents: bytemuck::bytes_of(&primitive.uniform()),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-
-        let albedo_texture_view = primitive
-            .albedo_texture
-            .and_then(|index| texture_views[index].as_ref())
-            .unwrap_or(placeholder_view);
-
-        let normal_texture_view = primitive
-            .normal_texture
-            .and_then(|index| texture_views[index].as_ref())
-            .unwrap_or(placeholder_view);
-
-        let primitive_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(&format!("primitive-bind-group-{i}")),
+        material_bind_groups.push(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(&format!("material-bind-group-{}", i)),
             layout: bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: primitive_uniform_buffer.as_entire_binding(),
+                    resource: material_uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(texture_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
                     resource: wgpu::BindingResource::TextureView(albedo_texture_view),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 3,
+                    binding: 2,
                     resource: wgpu::BindingResource::TextureView(normal_texture_view),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(texture_sampler),
+                },
             ],
-        });
+        }));
 
-        primitive_bind_groups.push(primitive_bind_group);
+        material_buffers.push(material_uniform_buffer);
     }
 
-    (primitive_buffers, primitive_bind_groups)
+    (material_buffers, material_bind_groups)
 }
 
 fn create_texture_views(gpu: &Gpu, model: &Model) -> Vec<Option<wgpu::TextureView>> {
@@ -273,4 +246,47 @@ fn create_placeholder_texture(gpu: &Gpu) -> wgpu::TextureView {
     );
 
     placeholder_texture.create_view(&wgpu::TextureViewDescriptor::default())
+}
+
+fn build_placeholder_bindings(
+    device: &wgpu::Device,
+    bind_group_layout: &wgpu::BindGroupLayout,
+    placeholder_texture_view: &wgpu::TextureView,
+    texture_sampler: &wgpu::Sampler,
+) -> wgpu::BindGroup {
+    let placeholder_material = Material {
+        color: [1.0; 4],
+        albedo_texture: None,
+        normal_texture: None,
+        bump: 0.0,
+    };
+
+    let placeholder_uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        label: Some("placeholder-material-buffer"),
+        contents: bytemuck::bytes_of(&placeholder_material.uniform()),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("placeholder-material-bind-group"),
+        layout: bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: placeholder_uniform_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(placeholder_texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(placeholder_texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Sampler(texture_sampler),
+            },
+        ],
+    })
 }

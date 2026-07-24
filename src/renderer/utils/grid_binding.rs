@@ -41,6 +41,14 @@ impl GridBindings {
         }
     }
 
+    pub(crate) fn grid_buffer(&self) -> &PrimitiveBuffer {
+        &self.grid_buffer
+    }
+
+    pub(crate) fn subgrid_buffer(&self) -> &PrimitiveBuffer {
+        &self.subgrid_buffer
+    }
+
     pub(crate) fn grid_bind_group(&self) -> &wgpu::BindGroup {
         &self.grid_bind_group
     }
@@ -51,13 +59,6 @@ impl GridBindings {
 
     pub(crate) fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout
-    }
-
-    pub(crate) fn record(&self, render_pass: &mut wgpu::RenderPass, bind_group_index: u32) {
-        render_pass.set_bind_group(bind_group_index, self.grid_bind_group(), &[]);
-        self.grid_buffer.record(render_pass);
-        render_pass.set_bind_group(bind_group_index, self.subgrid_bind_group(), &[]);
-        self.subgrid_buffer.record(render_pass);
     }
 }
 
@@ -86,7 +87,7 @@ fn build_grid_binding(device: &wgpu::Device, grid_bind_group_layout: &wgpu::Bind
 
     let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("grid-primitive-buffer"),
-        contents: bytemuck::bytes_of(&grid_primitive.uniform()),
+        contents: bytemuck::bytes_of(&grid_primitive.transform_uniform()),
         usage: wgpu::BufferUsages::UNIFORM,
     });
 
@@ -127,7 +128,7 @@ fn build_subgrid_binding(device: &wgpu::Device, grid_bind_group_layout: &wgpu::B
 
     let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("subgrid-primitive-buffer"),
-        contents: bytemuck::bytes_of(&grid_primitive.uniform()),
+        contents: bytemuck::bytes_of(&grid_primitive.transform_uniform()),
         usage: wgpu::BufferUsages::UNIFORM,
     });
 
