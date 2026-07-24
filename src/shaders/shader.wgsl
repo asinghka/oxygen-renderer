@@ -28,7 +28,7 @@ struct Light {
 }
 
 struct Material {
-    color: vec3<f32>,
+    color: vec4<f32>,
     bump: f32,
 }
 
@@ -110,7 +110,7 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
         return normal_color(normal);
     }
 
-    let albedo = textureSample(albedo_texel, tex_sampler, uv).rgb * material.color;
+    let albedo = textureSample(albedo_texel, tex_sampler, uv).rgb * material.color.rgb;
 
     let shadow = sample_shadow(in.light_pos);
     let color = blinn_phong_lighting(normal, light.direction, camera.eye, in.world_pos, albedo, shadow);

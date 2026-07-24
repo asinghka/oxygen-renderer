@@ -1,8 +1,12 @@
+use std::mem::offset_of;
+const _: () = assert!(offset_of!(MaterialUniform, bump) == 16);
+
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct MaterialUniform {
     color: [f32; 4],
     bump: f32,
+    _pad: [f32; 3],
 }
 
 pub(crate) struct Material {
@@ -17,6 +21,7 @@ impl Material {
         MaterialUniform {
             color: self.color,
             bump: self.bump,
+            _pad: [0.0; 3],
         }
     }
 }

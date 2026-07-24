@@ -44,6 +44,7 @@ impl Renderer {
 
         let wireframe_bind_group_layouts = &[
             Some(frame_bindings.frame_bind_group_layout()),
+            Some(material_bindings.bind_group_layout()),
             Some(primitive_bindings.bind_group_layout()),
         ];
 
@@ -171,7 +172,8 @@ impl Renderer {
             RenderMode::Wireframe => {
                 render_pass.set_pipeline(&self.wireframe_pipeline);
                 for primitive_binding in self.primitive_bindings.visible(invisible) {
-                    render_pass.set_bind_group(1, &primitive_binding.bind_group, &[]);
+                    render_pass.set_bind_group(1, self.material_bindings.bind_group(primitive_binding.material), &[]);
+                    render_pass.set_bind_group(2, &primitive_binding.bind_group, &[]);
 
                     render_pass.set_vertex_buffer(0, primitive_binding.primitive_buffer.vertex_buffer.slice(..));
                     render_pass.set_index_buffer(primitive_binding.primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
