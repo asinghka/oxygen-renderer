@@ -1,11 +1,11 @@
 use crate::scene::Vertex;
 use std::mem::offset_of;
 
-const _: () = assert!(offset_of!(PrimitiveUniform, normal_model) == 64);
+const _: () = assert!(offset_of!(TransformUniform, normal_model) == 64);
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub(crate) struct PrimitiveUniform {
+pub(crate) struct TransformUniform {
     model: [[f32; 4]; 4],
     normal_model: [[f32; 4]; 4],
 }
@@ -22,17 +22,17 @@ impl Primitive {
         let step = size / divisions as f32;
         let offsets = (0..=divisions).map(|n| -size / 2.0 + n as f32 * step);
 
-        Self::grid_lines(size, offsets, [0.25, 0.25, 0.25, 1.0])
+        Self::grid_lines(size, offsets)
     }
 
     pub(crate) fn subgrid(size: f32, divisions: u32) -> Self {
         let step = size / divisions as f32;
         let offsets = (0..divisions).map(|n| -size / 2.0 + (n as f32 + 0.5) * step);
 
-        Self::grid_lines(size, offsets, [0.1, 0.1, 0.1, 1.0])
+        Self::grid_lines(size, offsets)
     }
 
-    fn grid_lines(size: f32, offsets: impl Iterator<Item = f32>, color: [f32; 4]) -> Self {
+    fn grid_lines(size: f32, offsets: impl Iterator<Item = f32>) -> Self {
         let half = size / 2.0;
         let normal = [0.0, 1.0, 0.0];
 
@@ -83,8 +83,8 @@ impl Primitive {
         }
     }
 
-    pub(crate) fn uniform(&self) -> PrimitiveUniform {
-        PrimitiveUniform {
+    pub(crate) fn transform_uniform(&self) -> TransformUniform {
+        TransformUniform {
             model: self.model.to_cols_array_2d(),
             normal_model: self.model.inverse().transpose().to_cols_array_2d(),
         }

@@ -82,7 +82,7 @@ impl ApplicationHandler for App {
         let gpu = Gpu::new(window.clone());
         let mut gui = Gui::new(&window, &gpu.device, gpu.config.format);
         let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
-        let renderer = Renderer::new(&self.scene.camera, &self.scene.light, &gpu, &self.render_settings);
+        let renderer = Renderer::new(&gpu, &self.scene.camera, &self.scene.light, &self.render_settings);
 
         self.scene.camera.update_aspect_ratio(viewport.width as f32, viewport.height as f32);
 

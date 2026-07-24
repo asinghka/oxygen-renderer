@@ -3,18 +3,16 @@ struct Light {
     view_ortho: mat4x4<f32>,
 }
 
-struct Primitive {
+struct Transform {
     model: mat4x4<f32>,
     normal_model: mat4x4<f32>,
-    color: vec3<f32>,
-    bump: f32,
 }
 
 @group(0) @binding(0)
 var<uniform> light: Light;
 
 @group(1) @binding(0)
-var<uniform> primitive: Primitive;
+var<uniform> transform: Transform;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -22,5 +20,5 @@ struct VertexInput {
 
 @vertex
 fn vertex_shader(in: VertexInput) -> @builtin(position) vec4<f32> {
-    return light.view_ortho * primitive.model * vec4<f32>(in.position, 1.0);
+    return light.view_ortho * transform.model * vec4<f32>(in.position, 1.0);
 }

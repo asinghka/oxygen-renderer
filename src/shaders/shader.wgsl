@@ -3,6 +3,11 @@ struct Camera {
     view_projection: mat4x4<f32>,
 }
 
+struct Transform {
+    model: mat4x4<f32>,
+    normal_model: mat4x4<f32>,
+}
+
 struct RenderSettings {
     ambient: f32,
     diffuse: u32,
@@ -22,9 +27,7 @@ struct Light {
     view_ortho: mat4x4<f32>,
 }
 
-struct Primitive {
-    model: mat4x4<f32>,
-    normal_model: mat4x4<f32>,
+struct Material {
     color: vec3<f32>,
     bump: f32,
 }
@@ -32,29 +35,32 @@ struct Primitive {
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 
-@group(1) @binding(0)
+@group(0) @binding(1)
 var<uniform> settings: RenderSettings;
 
-@group(2) @binding(0)
+@group(0) @binding(2)
 var<uniform> light: Light;
 
-@group(2) @binding(1)
+@group(0) @binding(3)
 var shadow_map_sampler: sampler_comparison;
 
-@group(2) @binding(2)
+@group(0) @binding(4)
 var shadow_map_texel: texture_depth_2d;
 
-@group(3) @binding(0)
-var<uniform> primitive: Primitive;
+@group(1) @binding(0)
+var<uniform> transform: Transform;
 
-@group(3) @binding(1)
-var tex_sampler: sampler;
+@group(2) @binding(0)
+var<uniform> material: Material;
 
-@group(3) @binding(2)
+@group(2) @binding(1)
 var albedo_texel: texture_2d<f32>;
 
-@group(3) @binding(3)
+@group(2) @binding(2)
 var normal_texel: texture_2d<f32>;
+
+@group(2) @binding(3)
+var tex_sampler: sampler;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -76,8 +82,8 @@ struct VertexOutput {
 fn vertex_shader(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
 
-    let model = primitive.model;
-    let normal_model = primitive.normal_model;
+    let model = transform.model;
+    let normal_model = transform.normal_model;
 
     let world_pos = model * vec4<f32>(in.position, 1.0);
     out.world_pos = world_pos.xyz;
@@ -104,7 +110,7 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
         return normal_color(normal);
     }
 
-    let albedo = textureSample(albedo_texel, tex_sampler, uv).rgb * primitive.color;
+    let albedo = textureSample(albedo_texel, tex_sampler, uv).rgb * material.color;
 
     let shadow = sample_shadow(in.light_pos);
     let color = blinn_phong_lighting(normal, light.direction, camera.eye, in.world_pos, albedo, shadow);
@@ -170,7 +176,7 @@ fn sample_shadow(light_space_pos: vec4<f32>) -> f32 {
 }
 
 fn apply_normal_map(normal: vec3<f32>, tangent: vec4<f32>, uv: vec2<f32>) -> vec3<f32> {
-    let normal_strength = primitive.bump * settings.bump;
+    let normal_strength = material.bump * settings.bump;
     if normal_strength == 0.0 {
         return normalize(normal);
     }

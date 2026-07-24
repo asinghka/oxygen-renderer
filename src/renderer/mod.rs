@@ -9,7 +9,7 @@ use std::collections::HashSet;
 pub(crate) use viewport::*;
 
 use crate::camera::Camera;
-use crate::renderer::utils::{GridBindings, LightBinding, PrimitiveBindings, UniformBinding};
+use crate::renderer::utils::{FrameBindings, GridBindings, MaterialBindings, PrimitiveBindings};
 use crate::scene::{Light, Model, Scene, Vertex};
 use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 
@@ -25,52 +25,34 @@ pub(crate) struct Renderer {
     grid_bindings: GridBindings,
     primitive_bindings: PrimitiveBindings,
 
-    light_binding: LightBinding,
-    camera_uniform_binding: UniformBinding,
-    render_settings_uniform_binding: UniformBinding,
+    frame_bindings: FrameBindings,
+    material_bindings: MaterialBindings,
 }
 
 impl Renderer {
-    pub(crate) fn new(camera: &Camera, light: &Light, gpu: &Gpu, settings: &RenderSettings) -> Self {
+    pub(crate) fn new(gpu: &Gpu, camera: &Camera, light: &Light, settings: &RenderSettings) -> Self {
         let grid_bindings = GridBindings::new(gpu);
         let primitive_bindings = PrimitiveBindings::new(gpu);
+        let frame_bindings = FrameBindings::new(&gpu.device, light, settings, camera);
+        let material_bindings = MaterialBindings::new(gpu);
 
-        let render_settings_uniform_binding = UniformBinding::new(
-            &gpu.device,
-            "render-settings",
-            bytemuck::bytes_of(&settings.uniform()),
-            wgpu::ShaderStages::FRAGMENT,
-        );
-
-        let camera_uniform_binding = UniformBinding::new(
-            &gpu.device,
-            "camera",
-            bytemuck::bytes_of(&camera.uniform()),
-            wgpu::ShaderStages::VERTEX_FRAGMENT,
-        );
-
-        let light_binding = LightBinding::new(&gpu.device, light, settings.shadow_map_resolution);
-
-        // Primitive bind group at the highest index as this changed per draw call
-        // invalidating bind groups next to it
         let bind_group_layouts = &[
-            Some(camera_uniform_binding.bind_group_layout()),
-            Some(render_settings_uniform_binding.bind_group_layout()),
-            Some(light_binding.light_bind_group_layout()),
+            Some(frame_bindings.frame_bind_group_layout()),
             Some(primitive_bindings.bind_group_layout()),
+            Some(material_bindings.bind_group_layout()),
         ];
 
         let wireframe_bind_group_layouts = &[
-            Some(camera_uniform_binding.bind_group_layout()),
+            Some(frame_bindings.frame_bind_group_layout()),
             Some(primitive_bindings.bind_group_layout()),
         ];
 
         let shadow_map_bind_group_layouts = &[
-            Some(light_binding.shadow_map_bind_group_layout()),
+            Some(frame_bindings.shadow_map_bind_group_layout()),
             Some(primitive_bindings.bind_group_layout()),
         ];
 
-        let grid_bind_group_layouts = &[Some(camera_uniform_binding.bind_group_layout()), Some(grid_bindings.bind_group_layout())];
+        let grid_bind_group_layouts = &[Some(frame_bindings.frame_bind_group_layout()), Some(grid_bindings.bind_group_layout())];
 
         let (render_pipeline, wireframe_pipeline, shadow_map_pipeline, line_pipeline) = create_pipelines(
             &gpu.device,
@@ -87,38 +69,35 @@ impl Renderer {
             line_pipeline,
             grid_bindings,
             primitive_bindings,
-            light_binding,
-            camera_uniform_binding,
-            render_settings_uniform_binding,
+            frame_bindings,
+            material_bindings,
         }
     }
 
     pub(crate) fn render(&mut self, scene: &Scene, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, viewport: &Viewport, settings: &RenderSettings) {
-        self.render_settings_uniform_binding
-            .write(&gpu.queue, bytemuck::bytes_of(&settings.uniform()));
-        self.camera_uniform_binding.write(&gpu.queue, bytemuck::bytes_of(&scene.camera.uniform()));
-        self.light_binding.write(&gpu.queue, bytemuck::bytes_of(&scene.light.uniform()));
+        self.frame_bindings.write_all_buffers(&gpu.queue, &scene.camera, settings, &scene.light);
 
         let invisible = scene.model.get_invisible_primitives();
 
-        self.shadow_pass(&gpu.device, encoder, &invisible, settings);
+        //self.shadow_pass(&gpu.device, encoder, &invisible, settings);
         self.main_pass(encoder, &invisible, viewport, settings);
     }
 
     pub(crate) fn load(&mut self, gpu: &Gpu, model: &Model) {
         self.primitive_bindings.update_from_model(gpu, model);
+        self.material_bindings.update_from_model(gpu, model);
     }
 
     fn shadow_pass(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, invisible: &HashSet<usize>, settings: &RenderSettings) {
-        if settings.shadow_map_resolution != self.light_binding.current_shadow_map_resolution() {
-            self.light_binding.update_shadow_map(device, settings.shadow_map_resolution);
+        if settings.shadow_map_resolution != self.frame_bindings.current_shadow_map_resolution() {
+            self.frame_bindings.update_shadow_map(device, settings.shadow_map_resolution);
         }
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow-map-render-pass"),
             color_attachments: &[],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: self.light_binding.shadow_map_texture_view(),
+                view: self.frame_bindings.shadow_map_texture_view(),
                 depth_ops: Some(Operations {
                     load: LoadOp::Clear(1.0),
                     store: StoreOp::Store,
@@ -131,12 +110,14 @@ impl Renderer {
         });
 
         render_pass.set_pipeline(&self.shadow_map_pipeline);
-        render_pass.set_bind_group(0, self.light_binding.shadow_map_bind_group(), &[]);
+        render_pass.set_bind_group(0, self.frame_bindings.shadow_map_bind_group(), &[]);
 
         for (primitive_buffer, primitive_bind_group) in self.primitive_bindings.visible(invisible) {
             render_pass.set_bind_group(1, primitive_bind_group, &[]);
 
-            primitive_buffer.record(&mut render_pass);
+            render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
         }
     }
 
@@ -170,25 +151,46 @@ impl Renderer {
             multiview_mask: None,
         });
 
-        render_pass.set_bind_group(0, self.camera_uniform_binding.bind_group(), &[]);
+        render_pass.set_bind_group(0, self.frame_bindings.frame_bind_group(), &[]);
 
         if settings.grid {
             render_pass.set_pipeline(&self.line_pipeline);
-            self.grid_bindings.record(&mut render_pass, 1);
+
+            render_pass.set_bind_group(1, self.grid_bindings.grid_bind_group(), &[]);
+            render_pass.set_vertex_buffer(0, self.grid_bindings.grid_buffer().vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.grid_bindings.grid_buffer().index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..self.grid_bindings.grid_buffer().num_indices, 0, 0..1);
+
+            render_pass.set_bind_group(1, self.grid_bindings.subgrid_bind_group(), &[]);
+            render_pass.set_vertex_buffer(0, self.grid_bindings.subgrid_buffer().vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.grid_bindings.subgrid_buffer().index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..self.grid_bindings.subgrid_buffer().num_indices, 0, 0..1);
         }
 
+        /*
         match &settings.render_mode {
             RenderMode::Wireframe => {
                 render_pass.set_pipeline(&self.wireframe_pipeline);
-                self.primitive_bindings.record(&mut render_pass, 1, invisible);
+                for (primitive_buffer, primitive_bind_group) in self.primitive_bindings.visible(invisible) {
+                    render_pass.set_bind_group(1, primitive_bind_group, &[]);
+
+                    render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
+                }
             }
             _ => {
                 render_pass.set_pipeline(&self.render_pipeline);
-                render_pass.set_bind_group(1, self.render_settings_uniform_binding.bind_group(), &[]);
-                render_pass.set_bind_group(2, self.light_binding.light_bind_group(), &[]);
-                self.primitive_bindings.record(&mut render_pass, 3, invisible);
+                render_pass.set_bind_group(1, self.frame_bindings.frame_bind_group(), &[]);
+                for (primitive_buffer, primitive_bind_group) in self.primitive_bindings.visible(invisible) {
+                    render_pass.set_bind_group(2, primitive_bind_group, &[]);
+
+                    render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
+                }
             }
-        };
+        };*/
     }
 }
 

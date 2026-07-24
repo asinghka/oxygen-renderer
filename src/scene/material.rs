@@ -1,3 +1,10 @@
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct MaterialUniform {
+    color: [f32; 4],
+    bump: f32,
+}
+
 pub(crate) struct Material {
     pub(crate) color: [f32; 4],
     pub(crate) albedo_texture: Option<usize>,
@@ -6,12 +13,10 @@ pub(crate) struct Material {
 }
 
 impl Material {
-    pub(crate) fn color(color: [f32; 4]) -> Self {
-        Self {
-            color,
-            albedo_texture: None,
-            normal_texture: None,
-            bump: 0.0,
+    pub(crate) fn uniform(&self) -> MaterialUniform {
+        MaterialUniform {
+            color: self.color,
+            bump: self.bump,
         }
     }
 }
