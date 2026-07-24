@@ -38,8 +38,8 @@ impl Renderer {
 
         let bind_group_layouts = &[
             Some(frame_bindings.frame_bind_group_layout()),
-            Some(primitive_bindings.bind_group_layout()),
             Some(material_bindings.bind_group_layout()),
+            Some(primitive_bindings.bind_group_layout()),
         ];
 
         let wireframe_bind_group_layouts = &[
@@ -79,7 +79,7 @@ impl Renderer {
 
         let invisible = scene.model.get_invisible_primitives();
 
-        //self.shadow_pass(&gpu.device, encoder, &invisible, settings);
+        self.shadow_pass(&gpu.device, encoder, &invisible, settings);
         self.main_pass(encoder, &invisible, viewport, settings);
     }
 
@@ -112,12 +112,12 @@ impl Renderer {
         render_pass.set_pipeline(&self.shadow_map_pipeline);
         render_pass.set_bind_group(0, self.frame_bindings.shadow_map_bind_group(), &[]);
 
-        for (primitive_buffer, primitive_bind_group) in self.primitive_bindings.visible(invisible) {
-            render_pass.set_bind_group(1, primitive_bind_group, &[]);
+        for primitive_binding in self.primitive_bindings.visible(invisible) {
+            render_pass.set_bind_group(1, &primitive_binding.bind_group, &[]);
 
-            render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
+            render_pass.set_vertex_buffer(0, primitive_binding.primitive_buffer.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(primitive_binding.primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..primitive_binding.primitive_buffer.num_indices, 0, 0..1);
         }
     }
 
@@ -167,30 +167,30 @@ impl Renderer {
             render_pass.draw_indexed(0..self.grid_bindings.subgrid_buffer().num_indices, 0, 0..1);
         }
 
-        /*
         match &settings.render_mode {
             RenderMode::Wireframe => {
                 render_pass.set_pipeline(&self.wireframe_pipeline);
-                for (primitive_buffer, primitive_bind_group) in self.primitive_bindings.visible(invisible) {
-                    render_pass.set_bind_group(1, primitive_bind_group, &[]);
+                for primitive_binding in self.primitive_bindings.visible(invisible) {
+                    render_pass.set_bind_group(1, &primitive_binding.bind_group, &[]);
 
-                    render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
-                    render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                    render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
+                    render_pass.set_vertex_buffer(0, primitive_binding.primitive_buffer.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(primitive_binding.primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..primitive_binding.primitive_buffer.num_indices, 0, 0..1);
                 }
             }
             _ => {
                 render_pass.set_pipeline(&self.render_pipeline);
-                render_pass.set_bind_group(1, self.frame_bindings.frame_bind_group(), &[]);
-                for (primitive_buffer, primitive_bind_group) in self.primitive_bindings.visible(invisible) {
-                    render_pass.set_bind_group(2, primitive_bind_group, &[]);
 
-                    render_pass.set_vertex_buffer(0, primitive_buffer.vertex_buffer.slice(..));
-                    render_pass.set_index_buffer(primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                    render_pass.draw_indexed(0..primitive_buffer.num_indices, 0, 0..1);
+                for primitive_binding in self.primitive_bindings.visible(invisible) {
+                    render_pass.set_bind_group(1, self.material_bindings.bind_group(primitive_binding.material), &[]);
+                    render_pass.set_bind_group(2, &primitive_binding.bind_group, &[]);
+
+                    render_pass.set_vertex_buffer(0, primitive_binding.primitive_buffer.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(primitive_binding.primitive_buffer.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..primitive_binding.primitive_buffer.num_indices, 0, 0..1);
                 }
             }
-        };*/
+        };
     }
 }
 

@@ -48,19 +48,19 @@ var shadow_map_sampler: sampler_comparison;
 var shadow_map_texel: texture_depth_2d;
 
 @group(1) @binding(0)
-var<uniform> transform: Transform;
-
-@group(2) @binding(0)
 var<uniform> material: Material;
 
-@group(2) @binding(1)
+@group(1) @binding(1)
 var albedo_texel: texture_2d<f32>;
 
-@group(2) @binding(2)
+@group(1) @binding(2)
 var normal_texel: texture_2d<f32>;
 
-@group(2) @binding(3)
+@group(1) @binding(3)
 var tex_sampler: sampler;
+
+@group(2) @binding(0)
+var<uniform> transform: Transform;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,

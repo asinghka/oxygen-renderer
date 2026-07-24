@@ -4,11 +4,15 @@ use crate::scene::Model;
 use std::collections::HashSet;
 use wgpu::util::DeviceExt;
 
-pub(crate) struct PrimitiveBindings {
-    buffers: Vec<PrimitiveBuffer>,
+pub(crate) struct PrimitiveBinding {
+    pub(crate) primitive_buffer: PrimitiveBuffer,
+    pub(crate) bind_group: wgpu::BindGroup,
+    pub(crate) material: Option<usize>,
+}
 
+pub(crate) struct PrimitiveBindings {
+    primitive_bindings: Vec<PrimitiveBinding>,
     bind_group_layout: wgpu::BindGroupLayout,
-    bind_groups: Vec<wgpu::BindGroup>,
 }
 
 impl PrimitiveBindings {
@@ -28,26 +32,23 @@ impl PrimitiveBindings {
         });
 
         Self {
-            buffers: Vec::new(),
+            primitive_bindings: Vec::new(),
             bind_group_layout,
-            bind_groups: Vec::new(),
         }
     }
 
     pub(crate) fn update_from_model(&mut self, gpu: &Gpu, model: &Model) {
-        let (primitive_buffers, primitive_bind_groups) = build_bindings(&gpu.device, &self.bind_group_layout, model);
+        let primitive_bindings = build_bindings(&gpu.device, &self.bind_group_layout, model);
 
-        self.buffers = primitive_buffers;
-        self.bind_groups = primitive_bind_groups;
+        self.primitive_bindings = primitive_bindings
     }
 
-    pub(crate) fn visible(&self, invisible: &HashSet<usize>) -> impl Iterator<Item = (&PrimitiveBuffer, &wgpu::BindGroup)> {
-        self.buffers
+    pub(crate) fn visible(&self, invisible: &HashSet<usize>) -> impl Iterator<Item = &PrimitiveBinding> {
+        self.primitive_bindings
             .iter()
-            .zip(self.bind_groups.iter())
             .enumerate()
             .filter(|(i, _)| !invisible.contains(i))
-            .map(|(_, (buf, bg))| (buf, bg))
+            .map(|(_, b)| b)
     }
 
     pub(crate) fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
@@ -55,9 +56,8 @@ impl PrimitiveBindings {
     }
 }
 
-fn build_bindings(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayout, model: &Model) -> (Vec<PrimitiveBuffer>, Vec<wgpu::BindGroup>) {
-    let mut primitive_buffers = Vec::new();
-    let mut primitive_bind_groups = Vec::new();
+fn build_bindings(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayout, model: &Model) -> Vec<PrimitiveBinding> {
+    let mut primitive_bindings = Vec::new();
 
     for (i, primitive) in model.primitives.iter().enumerate() {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -74,11 +74,11 @@ fn build_bindings(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayo
 
         let num_indices = primitive.indices.len() as u32;
 
-        primitive_buffers.push(PrimitiveBuffer {
+        let primitive_buffer = PrimitiveBuffer {
             vertex_buffer,
             index_buffer,
             num_indices,
-        });
+        };
 
         let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("primitive-uniform-buffer-{i}")),
@@ -86,7 +86,7 @@ fn build_bindings(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayo
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
-        let primitive_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(&format!("primitive-bind-group-{i}")),
             layout: bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
@@ -95,8 +95,12 @@ fn build_bindings(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayo
             }],
         });
 
-        primitive_bind_groups.push(primitive_bind_group);
+        primitive_bindings.push(PrimitiveBinding {
+            primitive_buffer,
+            bind_group,
+            material: primitive.material,
+        });
     }
 
-    (primitive_buffers, primitive_bind_groups)
+    primitive_bindings
 }

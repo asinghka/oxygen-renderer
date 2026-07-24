@@ -1,5 +1,5 @@
 use crate::renderer::Gpu;
-use crate::scene::Model;
+use crate::scene::{Material, Model};
 use wgpu::util::{BufferInitDescriptor, DeviceExt, TextureDataOrder};
 use wgpu::wgt::SamplerDescriptor;
 use wgpu::{TexelCopyBufferLayout, TextureDimension, TextureFormat, TextureUsages};
@@ -10,9 +10,10 @@ pub(crate) struct MaterialBindings {
     material_bind_groups: Vec<wgpu::BindGroup>,
 
     texture_views: Vec<Option<wgpu::TextureView>>,
+    placeholder_texture_view: wgpu::TextureView,
     texture_sampler: wgpu::Sampler,
 
-    placeholder_texture_view: wgpu::TextureView,
+    placeholder_bind_group: wgpu::BindGroup,
 }
 
 impl MaterialBindings {
@@ -76,13 +77,16 @@ impl MaterialBindings {
 
         let placeholder_texture_view = create_placeholder_texture(gpu);
 
+        let placeholder_bind_group = build_placeholder_bindings(&gpu.device, &bind_group_layout, &placeholder_texture_view, &texture_sampler);
+
         Self {
             material_uniform_buffers: Vec::new(),
             bind_group_layout,
             material_bind_groups: Vec::new(),
             texture_views: Vec::new(),
-            texture_sampler,
             placeholder_texture_view,
+            texture_sampler,
+            placeholder_bind_group,
         }
     }
 
@@ -97,7 +101,6 @@ impl MaterialBindings {
             &self.texture_sampler,
             &self.placeholder_texture_view,
         );
-
         self.material_uniform_buffers = material_uniform_buffers;
         self.material_bind_groups = material_bind_groups;
     }
@@ -105,13 +108,21 @@ impl MaterialBindings {
     pub(crate) fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout
     }
+
+    pub(crate) fn bind_group(&self, index: Option<usize>) -> &wgpu::BindGroup {
+        if let Some(index) = index {
+            &self.material_bind_groups[index]
+        } else {
+            &self.placeholder_bind_group
+        }
+    }
 }
 
 fn build_bindings(
     device: &wgpu::Device,
     bind_group_layout: &wgpu::BindGroupLayout,
     model: &Model,
-    texture_views: &Vec<Option<wgpu::TextureView>>,
+    texture_views: &[Option<wgpu::TextureView>],
     texture_sampler: &wgpu::Sampler,
     placeholder_texture_view: &wgpu::TextureView,
 ) -> (Vec<wgpu::Buffer>, Vec<wgpu::BindGroup>) {
@@ -147,15 +158,15 @@ fn build_bindings(
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&albedo_texture_view),
+                    resource: wgpu::BindingResource::TextureView(albedo_texture_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&normal_texture_view),
+                    resource: wgpu::BindingResource::TextureView(normal_texture_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::Sampler(&texture_sampler),
+                    resource: wgpu::BindingResource::Sampler(texture_sampler),
                 },
             ],
         }));
@@ -235,4 +246,47 @@ fn create_placeholder_texture(gpu: &Gpu) -> wgpu::TextureView {
     );
 
     placeholder_texture.create_view(&wgpu::TextureViewDescriptor::default())
+}
+
+fn build_placeholder_bindings(
+    device: &wgpu::Device,
+    bind_group_layout: &wgpu::BindGroupLayout,
+    placeholder_texture_view: &wgpu::TextureView,
+    texture_sampler: &wgpu::Sampler,
+) -> wgpu::BindGroup {
+    let placeholder_material = Material {
+        color: [1.0; 4],
+        albedo_texture: None,
+        normal_texture: None,
+        bump: 0.0,
+    };
+
+    let placeholder_uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        label: Some("placeholder-material-buffer"),
+        contents: bytemuck::bytes_of(&placeholder_material.uniform()),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("placeholder-material-bind-group"),
+        layout: bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: placeholder_uniform_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(placeholder_texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(placeholder_texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Sampler(texture_sampler),
+            },
+        ],
+    })
 }
