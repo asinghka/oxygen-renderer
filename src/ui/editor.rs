@@ -91,7 +91,7 @@ pub(crate) fn build(
                     });
                 });
 
-            ScrollArea::vertical().show(ui, |ui| {
+            ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 ui.take_available_space();
                 Frame::default().inner_margin(ui.tokens().view_padding()).show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 6.0;
