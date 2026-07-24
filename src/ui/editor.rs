@@ -106,8 +106,6 @@ pub(crate) fn build(
         .frame(Frame::NONE.fill(ui.tokens().panel_bg_color))
         .default_size(220.0)
         .show(ui, |ui| {
-            ui.take_available_space();
-
             Panel::top("right-panel-header")
                 .exact_size(ui.tokens().title_bar_height())
                 .frame(Frame::default().inner_margin(Margin::symmetric(ui.tokens().view_padding(), 0)))
@@ -117,107 +115,109 @@ pub(crate) fn build(
                     });
                 });
 
-            Frame::NONE
-                .fill(ui.tokens().panel_bg_color)
-                .inner_margin(ui.tokens().view_padding())
-                .show(ui, |ui| {
-                    CollapsingHeader::new("Rendering").show(ui, |ui| {
-                        ui.spacing_mut().item_spacing.y = 4.0;
+            ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+                Frame::NONE
+                    .fill(ui.tokens().panel_bg_color)
+                    .inner_margin(ui.tokens().view_padding())
+                    .show(ui, |ui| {
+                        CollapsingHeader::new("Rendering").show(ui, |ui| {
+                            ui.spacing_mut().item_spacing.y = 4.0;
 
-                        ui.label("Mode");
-                        ComboBox::new("render-mode-combobox", "")
-                            .selected_text(format!("{:?}", settings.render_mode))
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut settings.render_mode, RenderMode::Color, "Color");
-                                ui.selectable_value(&mut settings.render_mode, RenderMode::Wireframe, "Wireframe");
-                                ui.selectable_value(&mut settings.render_mode, RenderMode::Depth, "Depth");
-                                ui.selectable_value(&mut settings.render_mode, RenderMode::Normal, "Normal");
-                            });
+                            ui.label("Mode");
+                            ComboBox::new("render-mode-combobox", "")
+                                .selected_text(format!("{:?}", settings.render_mode))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut settings.render_mode, RenderMode::Color, "Color");
+                                    ui.selectable_value(&mut settings.render_mode, RenderMode::Wireframe, "Wireframe");
+                                    ui.selectable_value(&mut settings.render_mode, RenderMode::Depth, "Depth");
+                                    ui.selectable_value(&mut settings.render_mode, RenderMode::Normal, "Normal");
+                                });
+                        });
+
+                        ui.add_space(12.0);
+
+                        CollapsingHeader::new("Lighting").show(ui, |ui| {
+                            ui.label("Ambient Light Strength");
+                            Slider::new(&mut settings.ambient, 0.0..=1.0).ui(ui);
+
+                            ui.add_space(12.0);
+
+                            ui.label("Diffuse Lighting");
+                            ui.checkbox(&mut settings.diffuse, "");
+
+                            ui.add_space(12.0);
+
+                            ui.label("Specular Highlights");
+                            ui.checkbox(&mut settings.specular, "");
+
+                            ui.label("Specular Strength");
+                            Slider::new(&mut settings.specular_strength, 0.0..=1.0).ui(ui);
+
+                            ui.label("Shininess");
+                            Slider::new(&mut settings.shininess, 0.0..=1.0).ui(ui);
+
+                            ui.add_space(12.0);
+
+                            ui.label("Bump strength");
+                            Slider::new(&mut settings.bump, 0.0..=5.0).ui(ui);
+                        });
+
+                        ui.add_space(12.0);
+
+                        CollapsingHeader::new("Shadows").show(ui, |ui| {
+                            ui.label("Shadow Map");
+                            ui.checkbox(&mut settings.shadow, "");
+
+                            ui.add_space(12.0);
+
+                            ui.label("Resolution");
+                            let mut exponent = settings.shadow_map_resolution.trailing_zeros();
+                            Slider::new(&mut exponent, 7..=13)
+                                .custom_formatter(|n, _| (1u32 << n as u32).to_string())
+                                .ui(ui);
+                            settings.shadow_map_resolution = 1 << exponent;
+
+                            ui.add_space(12.0);
+
+                            ui.label("PCF Samples");
+                            Slider::new(&mut settings.pcf, 0..=6)
+                                .step_by(2.0)
+                                .custom_formatter(|n, _| {
+                                    let samples = (n as u32 + 1) * (n as u32 + 1);
+                                    if samples == 1 { String::from("1 (Off)") } else { samples.to_string() }
+                                })
+                                .ui(ui);
+                        });
+
+                        ui.add_space(12.0);
+
+                        CollapsingHeader::new("Scene").show(ui, |ui| {
+                            ui.spacing_mut().item_spacing.y = 4.0;
+
+                            ui.label("Show grid");
+                            ui.checkbox(&mut settings.grid, "");
+
+                            ui.add_space(12.0);
+
+                            ui.label("Background Color");
+                            ui.color_edit_button_rgb(&mut settings.background);
+
+                            ui.add_space(12.0);
+
+                            ui.label("Light Azimuth");
+                            Slider::new(&mut light.azimuth, 0.0..=std::f32::consts::TAU)
+                                .custom_formatter(degrees_formatter)
+                                .custom_parser(degrees_parser)
+                                .ui(ui);
+
+                            ui.label("Light Elevation");
+                            Slider::new(&mut light.elevation, -std::f32::consts::FRAC_PI_2..=std::f32::consts::FRAC_PI_2)
+                                .custom_formatter(degrees_formatter)
+                                .custom_parser(degrees_parser)
+                                .ui(ui);
+                        });
                     });
-
-                    ui.add_space(12.0);
-
-                    CollapsingHeader::new("Lighting").show(ui, |ui| {
-                        ui.label("Ambient Light Strength");
-                        Slider::new(&mut settings.ambient, 0.0..=1.0).ui(ui);
-
-                        ui.add_space(12.0);
-
-                        ui.label("Diffuse Lighting");
-                        ui.checkbox(&mut settings.diffuse, "");
-
-                        ui.add_space(12.0);
-
-                        ui.label("Specular Highlights");
-                        ui.checkbox(&mut settings.specular, "");
-
-                        ui.label("Specular Strength");
-                        Slider::new(&mut settings.specular_strength, 0.0..=1.0).ui(ui);
-
-                        ui.label("Shininess");
-                        Slider::new(&mut settings.shininess, 0.0..=1.0).ui(ui);
-
-                        ui.add_space(12.0);
-
-                        ui.label("Bump strength");
-                        Slider::new(&mut settings.bump, 0.0..=5.0).ui(ui);
-                    });
-
-                    ui.add_space(12.0);
-
-                    CollapsingHeader::new("Shadows").show(ui, |ui| {
-                        ui.label("Shadow Map");
-                        ui.checkbox(&mut settings.shadow, "");
-
-                        ui.add_space(12.0);
-
-                        ui.label("Resolution");
-                        let mut exponent = settings.shadow_map_resolution.trailing_zeros();
-                        Slider::new(&mut exponent, 7..=13)
-                            .custom_formatter(|n, _| (1u32 << n as u32).to_string())
-                            .ui(ui);
-                        settings.shadow_map_resolution = 1 << exponent;
-
-                        ui.add_space(12.0);
-
-                        ui.label("PCF Samples");
-                        Slider::new(&mut settings.pcf, 0..=6)
-                            .step_by(2.0)
-                            .custom_formatter(|n, _| {
-                                let samples = (n as u32 + 1) * (n as u32 + 1);
-                                if samples == 1 { String::from("1 (Off)") } else { samples.to_string() }
-                            })
-                            .ui(ui);
-                    });
-
-                    ui.add_space(12.0);
-
-                    CollapsingHeader::new("Scene").show(ui, |ui| {
-                        ui.spacing_mut().item_spacing.y = 4.0;
-
-                        ui.label("Show grid");
-                        ui.checkbox(&mut settings.grid, "");
-
-                        ui.add_space(12.0);
-
-                        ui.label("Background Color");
-                        ui.color_edit_button_rgb(&mut settings.background);
-
-                        ui.add_space(12.0);
-
-                        ui.label("Light Azimuth");
-                        Slider::new(&mut light.azimuth, 0.0..=std::f32::consts::TAU)
-                            .custom_formatter(degrees_formatter)
-                            .custom_parser(degrees_parser)
-                            .ui(ui);
-
-                        ui.label("Light Elevation");
-                        Slider::new(&mut light.elevation, -std::f32::consts::FRAC_PI_2..=std::f32::consts::FRAC_PI_2)
-                            .custom_formatter(degrees_formatter)
-                            .custom_parser(degrees_parser)
-                            .ui(ui);
-                    });
-                });
+            });
         });
 
     CentralPanel::default()
