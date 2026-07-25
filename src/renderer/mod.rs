@@ -353,8 +353,8 @@ fn create_shadow_map_pipeline(device: &wgpu::Device, bind_group_layouts: &[Optio
             depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState {
-                constant: 2,
-                slope_scale: 2.0,
+                constant: 4,
+                slope_scale: 8.0,
                 clamp: 0.0,
             },
         }),
