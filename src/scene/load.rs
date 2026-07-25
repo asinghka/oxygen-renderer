@@ -32,13 +32,13 @@ pub(crate) fn load(path: String) -> Model {
         .materials()
         .map(|m| {
             let normal_texture = m.normal_texture();
+            let pbr_material = m.pbr_metallic_roughness();
 
             Material {
-                color: m.pbr_metallic_roughness().base_color_factor(),
-                albedo_texture: m
-                    .pbr_metallic_roughness()
-                    .base_color_texture()
-                    .map(|info| info.texture().source().index()),
+                color: pbr_material.base_color_factor(),
+                metallic: pbr_material.metallic_factor(),
+                roughness: pbr_material.roughness_factor(),
+                albedo_texture: pbr_material.base_color_texture().map(|info| info.texture().source().index()),
                 normal_texture: normal_texture.as_ref().map(|t| t.texture().source().index()),
                 bump: normal_texture.as_ref().map(|nt| nt.scale()).unwrap_or(0.0),
             }
