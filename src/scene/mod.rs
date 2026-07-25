@@ -1,3 +1,4 @@
+mod grid;
 mod light;
 mod load;
 mod material;
@@ -7,6 +8,7 @@ mod texture;
 mod vertex;
 
 use crate::camera::Camera;
+pub(crate) use grid::*;
 pub(crate) use light::*;
 pub(crate) use load::*;
 pub(crate) use material::*;

@@ -1,6 +1,6 @@
 use crate::renderer::Gpu;
-use crate::renderer::utils::PrimitiveBuffer;
-use crate::scene::Primitive;
+use crate::renderer::bindings::PrimitiveBuffer;
+use crate::scene::GridPrimitive;
 use wgpu::util::DeviceExt;
 
 pub(crate) struct GridBindings {
@@ -63,7 +63,7 @@ impl GridBindings {
 }
 
 fn build_grid_binding(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {
-    let grid_primitive = Primitive::grid(30.0, 16);
+    let grid_primitive = GridPrimitive::grid(30.0, 16);
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("grid-vertex-buffer"),
@@ -87,7 +87,7 @@ fn build_grid_binding(device: &wgpu::Device, grid_bind_group_layout: &wgpu::Bind
 
     let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("grid-primitive-buffer"),
-        contents: bytemuck::bytes_of(&grid_primitive.transform_uniform()),
+        contents: bytemuck::bytes_of(&grid_primitive.uniform()),
         usage: wgpu::BufferUsages::UNIFORM,
     });
 
@@ -104,7 +104,7 @@ fn build_grid_binding(device: &wgpu::Device, grid_bind_group_layout: &wgpu::Bind
 }
 
 fn build_subgrid_binding(device: &wgpu::Device, grid_bind_group_layout: &wgpu::BindGroupLayout) -> (PrimitiveBuffer, wgpu::BindGroup) {
-    let grid_primitive = Primitive::subgrid(30.0, 16);
+    let grid_primitive = GridPrimitive::subgrid(30.0, 16);
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("subgrid-vertex-buffer"),
@@ -128,7 +128,7 @@ fn build_subgrid_binding(device: &wgpu::Device, grid_bind_group_layout: &wgpu::B
 
     let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("subgrid-primitive-buffer"),
-        contents: bytemuck::bytes_of(&grid_primitive.transform_uniform()),
+        contents: bytemuck::bytes_of(&grid_primitive.uniform()),
         usage: wgpu::BufferUsages::UNIFORM,
     });
 

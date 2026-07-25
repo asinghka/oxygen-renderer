@@ -1,10 +1,10 @@
 mod frame_bindings;
-mod grid_binding;
+mod grid_bindings;
 mod material_bindings;
 mod primitive_bindings;
 
 pub(crate) use frame_bindings::*;
-pub(crate) use grid_binding::*;
+pub(crate) use grid_bindings::*;
 pub(crate) use material_bindings::*;
 pub(crate) use primitive_bindings::*;
 

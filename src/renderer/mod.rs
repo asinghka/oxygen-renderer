@@ -1,6 +1,6 @@
+pub mod bindings;
 mod gpu;
 mod settings;
-pub mod utils;
 mod viewport;
 
 pub(crate) use gpu::*;
@@ -9,7 +9,7 @@ use std::collections::HashSet;
 pub(crate) use viewport::*;
 
 use crate::camera::Camera;
-use crate::renderer::utils::{FrameBindings, GridBindings, MaterialBindings, PrimitiveBindings};
+use crate::renderer::bindings::{FrameBindings, GridBindings, MaterialBindings, PrimitiveBindings};
 use crate::scene::{Light, Model, Scene, Vertex};
 use wgpu::{Color, LoadOp, Operations, ShaderSource, StoreOp, TextureFormat};
 

@@ -1,5 +1,5 @@
 use crate::renderer::Gpu;
-use crate::renderer::utils::PrimitiveBuffer;
+use crate::renderer::bindings::PrimitiveBuffer;
 use crate::scene::Model;
 use std::collections::HashSet;
 use wgpu::util::DeviceExt;
