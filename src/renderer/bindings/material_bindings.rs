@@ -256,6 +256,8 @@ fn build_placeholder_bindings(
 ) -> wgpu::BindGroup {
     let placeholder_material = Material {
         color: [1.0; 4],
+        metallic: 0.0,
+        roughness: 0.0,
         albedo_texture: None,
         normal_texture: None,
         bump: 0.0,
