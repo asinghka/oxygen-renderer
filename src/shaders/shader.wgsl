@@ -6,6 +6,7 @@ struct Camera {
 struct Transform {
     model: mat4x4<f32>,
     normal_model: mat4x4<f32>,
+    scale: f32,
 }
 
 struct RenderSettings {
@@ -82,7 +83,9 @@ struct VertexOutput {
 fn vertex_shader(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
 
-    let model = transform.model;
+    let custom_scale = mat4x4<f32>(vec4(transform.scale, 0.0, 0.0, 0.0), vec4(0.0, transform.scale, 0.0, 0.0), vec4(0.0, 0.0, transform.scale, 0.0), vec4(0.0, 0.0, 0.0, 1.0));
+
+    let model = custom_scale * transform.model;
     let normal_model = transform.normal_model;
 
     let world_pos = model * vec4<f32>(in.position, 1.0);

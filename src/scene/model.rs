@@ -36,6 +36,8 @@ pub(crate) struct Model {
     pub(crate) root_indices: Vec<usize>,
     pub(crate) materials: Vec<Material>,
     pub(crate) textures: Vec<Option<TextureData>>,
+
+    pub(crate) scale: f32,
 }
 
 impl Model {

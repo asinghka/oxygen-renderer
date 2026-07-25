@@ -93,6 +93,7 @@ pub(crate) fn load(path: String) -> Model {
         primitives,
         materials,
         textures,
+        scale: 1.0,
     }
 }
 

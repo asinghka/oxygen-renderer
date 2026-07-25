@@ -1,12 +1,17 @@
 use crate::renderer::Gpu;
 use crate::renderer::bindings::PrimitiveBuffer;
-use crate::scene::Model;
+use crate::scene::{Model, TransformUniform};
 use std::collections::HashSet;
+use std::mem::offset_of;
+use wgpu::BufferAddress;
 use wgpu::util::DeviceExt;
 
 pub(crate) struct PrimitiveBinding {
     pub(crate) primitive_buffer: PrimitiveBuffer,
+
+    pub(crate) primitive_uniform_buffer: wgpu::Buffer,
     pub(crate) bind_group: wgpu::BindGroup,
+
     pub(crate) material: Option<usize>,
 }
 
@@ -54,6 +59,16 @@ impl PrimitiveBindings {
     pub(crate) fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout
     }
+
+    pub(crate) fn write_transform_buffer(&mut self, queue: &wgpu::Queue, scale: f32) {
+        for binding in &self.primitive_bindings {
+            queue.write_buffer(
+                &binding.primitive_uniform_buffer,
+                offset_of!(TransformUniform, scale) as BufferAddress,
+                bytemuck::bytes_of(&scale),
+            );
+        }
+    }
 }
 
 fn build_bindings(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayout, model: &Model) -> Vec<PrimitiveBinding> {
@@ -83,7 +98,7 @@ fn build_bindings(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayo
         let primitive_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("primitive-uniform-buffer-{i}")),
             contents: bytemuck::bytes_of(&primitive.transform_uniform()),
-            usage: wgpu::BufferUsages::UNIFORM,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -97,6 +112,7 @@ fn build_bindings(device: &wgpu::Device, bind_group_layout: &wgpu::BindGroupLayo
 
         primitive_bindings.push(PrimitiveBinding {
             primitive_buffer,
+            primitive_uniform_buffer,
             bind_group,
             material: primitive.material,
         });

@@ -77,6 +77,7 @@ impl Renderer {
 
     pub(crate) fn render(&mut self, scene: &Scene, gpu: &Gpu, encoder: &mut wgpu::CommandEncoder, viewport: &Viewport, settings: &RenderSettings) {
         self.frame_bindings.write_all_buffers(&gpu.queue, &scene.camera, settings, &scene.light);
+        self.primitive_bindings.write_transform_buffer(&gpu.queue, scene.model.scale);
 
         let invisible = scene.model.get_invisible_primitives();
 

@@ -46,7 +46,7 @@ impl Default for RenderSettings {
             bump: 1.0,
             shadow: true,
             shadow_map_resolution: 4096,
-            pcf: 0,
+            pcf: 2,
             background: [0.008; 3],
             render_mode: RenderMode::Color,
             grid: true,

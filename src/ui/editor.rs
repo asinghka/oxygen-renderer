@@ -216,6 +216,13 @@ pub(crate) fn build(
                                 .custom_parser(degrees_parser)
                                 .ui(ui);
                         });
+
+                        ui.add_space(12.0);
+
+                        CollapsingHeader::new("Model").show(ui, |ui| {
+                            ui.label("Scale");
+                            Slider::new(&mut model.scale, 0.5..=5.0).ui(ui);
+                        });
                     });
             });
         });
