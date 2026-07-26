@@ -31,6 +31,8 @@ struct Light {
 struct Material {
     color: vec4<f32>,
     bump: f32,
+    metallic: f32,
+    roughness: f32,
 }
 
 @group(0) @binding(0)

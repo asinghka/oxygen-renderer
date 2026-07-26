@@ -6,7 +6,9 @@ const _: () = assert!(offset_of!(MaterialUniform, bump) == 16);
 pub(crate) struct MaterialUniform {
     color: [f32; 4],
     bump: f32,
-    _pad: [f32; 3],
+    metallic: f32,
+    roughness: f32,
+    _pad: f32,
 }
 
 pub(crate) struct Material {
@@ -23,7 +25,9 @@ impl Material {
         MaterialUniform {
             color: self.color,
             bump: self.bump,
-            _pad: [0.0; 3],
+            metallic: self.metallic,
+            roughness: self.roughness,
+            _pad: 0.0,
         }
     }
 }
