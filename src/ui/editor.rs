@@ -127,7 +127,8 @@ pub(crate) fn build(
                             ComboBox::new("render-mode-combobox", "")
                                 .selected_text(format!("{:?}", settings.render_mode))
                                 .show_ui(ui, |ui| {
-                                    ui.selectable_value(&mut settings.render_mode, RenderMode::Color, "Color");
+                                    ui.selectable_value(&mut settings.render_mode, RenderMode::BlinnPhong, "Blinn-Phong");
+                                    ui.selectable_value(&mut settings.render_mode, RenderMode::PhysicallyBased, "Physically-Based");
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::Wireframe, "Wireframe");
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::Depth, "Depth");
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::Normal, "Normal");

@@ -16,6 +16,7 @@ pub(crate) struct RenderSettingsUniform {
     shadow: u32,
     shadow_map_resolution: f32,
     pcf: f32,
+    pbr: u32,
     depth: u32,
     normal: u32,
 }
@@ -48,7 +49,7 @@ impl Default for RenderSettings {
             shadow_map_resolution: 4096,
             pcf: 2,
             background: [0.008; 3],
-            render_mode: RenderMode::Color,
+            render_mode: RenderMode::BlinnPhong,
             grid: true,
         }
     }
@@ -66,6 +67,7 @@ impl RenderSettings {
             shadow: self.shadow as u32,
             shadow_map_resolution: self.shadow_map_resolution as f32,
             pcf: self.pcf as f32,
+            pbr: matches!(self.render_mode, RenderMode::PhysicallyBased) as u32,
             depth: matches!(self.render_mode, RenderMode::Depth) as u32,
             normal: matches!(self.render_mode, RenderMode::Normal) as u32,
         }
@@ -74,7 +76,8 @@ impl RenderSettings {
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum RenderMode {
-    Color,
+    BlinnPhong,
+    PhysicallyBased,
     Wireframe,
     Depth,
     Normal,

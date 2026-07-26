@@ -19,6 +19,7 @@ struct RenderSettings {
     shadow: u32,
     shadow_map_resolution: f32,
     pcf: f32,
+    pbr: u32,
     depth: u32,
     normal: u32,
 }
@@ -106,6 +107,10 @@ fn vertex_shader(in: VertexInput) -> VertexOutput {
 fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
     if settings.depth == 1u {
         return depth_color(in.clip_pos);
+    }
+
+    if settings.pbr == 1u {
+        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
     }
 
     let uv = in.uv;
