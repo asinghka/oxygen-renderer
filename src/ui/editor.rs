@@ -127,44 +127,77 @@ pub(crate) fn build(
                             ComboBox::new("render-mode-combobox", "")
                                 .selected_text(format!("{:?}", settings.render_mode))
                                 .show_ui(ui, |ui| {
-                                    ui.selectable_value(&mut settings.render_mode, RenderMode::Color, "Color");
+                                    ui.selectable_value(&mut settings.render_mode, RenderMode::BlinnPhong, "Blinn-Phong");
+                                    ui.selectable_value(&mut settings.render_mode, RenderMode::PhysicallyBased, "Physically-Based");
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::Wireframe, "Wireframe");
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::Depth, "Depth");
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::Normal, "Normal");
                                 });
-                        });
 
-                        ui.add_space(12.0);
+                            match settings.render_mode {
+                                RenderMode::BlinnPhong => {
+                                    ui.add_space(12.0);
 
-                        CollapsingHeader::new("Lighting").show(ui, |ui| {
-                            ui.label("Ambient Light Strength");
-                            Slider::new(&mut settings.ambient, 0.0..=1.0).ui(ui);
+                                    ui.label("Diffuse Lighting");
+                                    ui.checkbox(&mut settings.diffuse, "");
+
+                                    ui.add_space(12.0);
+
+                                    ui.label("Specular Highlights");
+                                    ui.checkbox(&mut settings.specular, "");
+
+                                    ui.label("Specular Strength");
+                                    Slider::new(&mut settings.specular_strength, 0.0..=1.0).ui(ui);
+
+                                    ui.label("Shininess");
+                                    Slider::new(&mut settings.shininess, 0.0..=1.0).ui(ui);
+                                }
+                                RenderMode::PhysicallyBased => {}
+                                RenderMode::Wireframe | RenderMode::Depth | RenderMode::Normal => {}
+                            }
 
                             ui.add_space(12.0);
 
-                            ui.label("Diffuse Lighting");
-                            ui.checkbox(&mut settings.diffuse, "");
-
-                            ui.add_space(12.0);
-
-                            ui.label("Specular Highlights");
-                            ui.checkbox(&mut settings.specular, "");
-
-                            ui.label("Specular Strength");
-                            Slider::new(&mut settings.specular_strength, 0.0..=1.0).ui(ui);
-
-                            ui.label("Shininess");
-                            Slider::new(&mut settings.shininess, 0.0..=1.0).ui(ui);
-
-                            ui.add_space(12.0);
-
-                            ui.label("Bump strength");
+                            ui.label("Normal Map Bump Strength");
                             Slider::new(&mut settings.bump, 0.0..=5.0).ui(ui);
                         });
 
                         ui.add_space(12.0);
 
+                        CollapsingHeader::new("Lighting").show(ui, |ui| {
+                            ui.spacing_mut().item_spacing.y = 4.0;
+
+                            ui.label("Color");
+                            ui.color_edit_button_rgb(&mut light.color);
+
+                            ui.label("Intensity");
+                            Slider::new(&mut light.intensity, 0.0..=std::f32::consts::TAU).ui(ui);
+
+                            ui.add_space(12.0);
+
+                            ui.label("Azimuth");
+                            Slider::new(&mut light.azimuth, 0.0..=std::f32::consts::TAU)
+                                .custom_formatter(degrees_formatter)
+                                .custom_parser(degrees_parser)
+                                .ui(ui);
+
+                            ui.label("Elevation");
+                            Slider::new(&mut light.elevation, -std::f32::consts::FRAC_PI_2..=std::f32::consts::FRAC_PI_2)
+                                .custom_formatter(degrees_formatter)
+                                .custom_parser(degrees_parser)
+                                .ui(ui);
+
+                            ui.add_space(12.0);
+
+                            ui.label("Ambient Strength");
+                            Slider::new(&mut settings.ambient, 0.0..=1.0).ui(ui);
+                        });
+
+                        ui.add_space(12.0);
+
                         CollapsingHeader::new("Shadows").show(ui, |ui| {
+                            ui.spacing_mut().item_spacing.y = 4.0;
+
                             ui.label("Shadow Map");
                             ui.checkbox(&mut settings.shadow, "");
 
@@ -194,32 +227,20 @@ pub(crate) fn build(
                         CollapsingHeader::new("Scene").show(ui, |ui| {
                             ui.spacing_mut().item_spacing.y = 4.0;
 
-                            ui.label("Show grid");
-                            ui.checkbox(&mut settings.grid, "");
-
-                            ui.add_space(12.0);
-
                             ui.label("Background Color");
                             ui.color_edit_button_rgb(&mut settings.background);
 
                             ui.add_space(12.0);
 
-                            ui.label("Light Azimuth");
-                            Slider::new(&mut light.azimuth, 0.0..=std::f32::consts::TAU)
-                                .custom_formatter(degrees_formatter)
-                                .custom_parser(degrees_parser)
-                                .ui(ui);
-
-                            ui.label("Light Elevation");
-                            Slider::new(&mut light.elevation, -std::f32::consts::FRAC_PI_2..=std::f32::consts::FRAC_PI_2)
-                                .custom_formatter(degrees_formatter)
-                                .custom_parser(degrees_parser)
-                                .ui(ui);
+                            ui.label("Show Grid");
+                            ui.checkbox(&mut settings.grid, "");
                         });
 
                         ui.add_space(12.0);
 
                         CollapsingHeader::new("Model").show(ui, |ui| {
+                            ui.spacing_mut().item_spacing.y = 4.0;
+
                             ui.label("Scale");
                             Slider::new(&mut model.scale, 0.5..=5.0).ui(ui);
                         });
