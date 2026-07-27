@@ -27,6 +27,8 @@ struct RenderSettings {
 struct Light {
     direction: vec3<f32>,
     view_ortho: mat4x4<f32>,
+    color: vec3<f32>,
+    intensity: f32,
 }
 
 struct Material {
@@ -258,7 +260,8 @@ fn physically_based_lighting(normal: vec3<f32>, light_dir: vec3<f32>, camera_eye
     let kd = (vec3<f32>(1.0) - f) * (1.0 - material.metallic);
     let diffuse = kd * albedo / PI;
 
-    let radiance_out = (diffuse + specular) * n_dot_l * shadow;
+    let radiance = light.color * light.intensity;
+    let radiance_out = (diffuse + specular) * radiance * n_dot_l * shadow;
     let ambient = vec3<f32>(settings.ambient) * albedo;
     let color = ambient + radiance_out;
 
