@@ -15,6 +15,7 @@ pub(crate) struct Material {
     pub(crate) color: [f32; 4],
     pub(crate) metallic: f32,
     pub(crate) roughness: f32,
+    pub(crate) metallic_roughness_texture: Option<usize>,
     pub(crate) albedo_texture: Option<usize>,
     pub(crate) normal_texture: Option<usize>,
     pub(crate) bump: f32,

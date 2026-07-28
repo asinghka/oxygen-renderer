@@ -38,6 +38,7 @@ pub(crate) fn load(path: String) -> Model {
                 color: pbr_material.base_color_factor(),
                 metallic: pbr_material.metallic_factor(),
                 roughness: pbr_material.roughness_factor(),
+                metallic_roughness_texture: pbr_material.metallic_roughness_texture().map(|info| info.texture().source().index()),
                 albedo_texture: pbr_material.base_color_texture().map(|info| info.texture().source().index()),
                 normal_texture: normal_texture.as_ref().map(|t| t.texture().source().index()),
                 bump: normal_texture.as_ref().map(|nt| nt.scale()).unwrap_or(0.0),

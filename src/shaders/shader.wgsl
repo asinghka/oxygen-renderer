@@ -63,6 +63,9 @@ var albedo_texel: texture_2d<f32>;
 var normal_texel: texture_2d<f32>;
 
 @group(1) @binding(3)
+var metallic_roughness_texel: texture_2d<f32>;
+
+@group(1) @binding(4)
 var tex_sampler: sampler;
 
 @group(2) @binding(0)
@@ -127,7 +130,8 @@ fn fragment_shader(in: VertexOutput) -> @location(0) vec4<f32> {
 
     var color = vec3<f32>(0.0, 0.0, 0.0);
     if settings.pbr == 1u {
-        color = physically_based_lighting(normal, light.direction, camera.eye, in.world_pos, albedo, shadow);
+        let mr_texel = textureSample(metallic_roughness_texel, tex_sampler, uv).rgb;
+        color = physically_based_lighting(normal, light.direction, mr_texel, camera.eye, in.world_pos, albedo, shadow);
     } else {
         color = blinn_phong_lighting(normal, light.direction, camera.eye, in.world_pos, albedo, shadow);
     }
@@ -237,7 +241,7 @@ fn normal_color(normal: vec3<f32>) -> vec4<f32> {
 
 const PI: f32 = 3.1415926;
 
-fn physically_based_lighting(normal: vec3<f32>, light_dir: vec3<f32>, camera_eye: vec3<f32>, world_space_pos: vec3<f32>, albedo: vec3<f32>, shadow: f32) -> vec3<f32> {
+fn physically_based_lighting(normal: vec3<f32>, light_dir: vec3<f32>, mr_texel: vec3<f32>, camera_eye: vec3<f32>, world_space_pos: vec3<f32>, albedo: vec3<f32>, shadow: f32) -> vec3<f32> {
     let n = normalize(normal);
     let l = normalize(light_dir);
     let v = normalize(camera_eye - world_space_pos);
@@ -248,16 +252,17 @@ fn physically_based_lighting(normal: vec3<f32>, light_dir: vec3<f32>, camera_eye
     let n_dot_h = max(dot(n, h), 0.0);
     let h_dot_v = max(dot(h, v), 0.0);
 
-    let roughness = clamp(material.roughness, 0.045, 1.0);
+    let roughness = clamp(mr_texel.g * material.roughness, 0.045, 1.0);
+    let metallic = mr_texel.b * material.metallic;
     let k = pow(roughness + 1.0, 2.0) / 8.0;
-    let f0 = mix(vec3<f32>(0.04), albedo, material.metallic);
+    let f0 = mix(vec3<f32>(0.04), albedo, metallic);
 
     let d = distribution_ggx(n_dot_h, roughness);
     let g = geometry_smith(n_dot_v, n_dot_l, k);
     let f = fresnel_schlick(f0, h_dot_v);
 
     let specular = (d * g * f) / (4.0 * n_dot_v * n_dot_l + 0.0001);
-    let kd = (vec3<f32>(1.0) - f) * (1.0 - material.metallic);
+    let kd = (vec3<f32>(1.0) - f) * (1.0 - metallic);
     let diffuse = kd * albedo / PI;
 
     let radiance = light.color * light.intensity;

@@ -54,6 +54,16 @@ impl MaterialBindings {
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
@@ -148,6 +158,12 @@ fn build_bindings(
             placeholder_texture_view
         };
 
+        let metallic_roughness_view = if let Some(index) = material.metallic_roughness_texture {
+            texture_views[index].as_ref().unwrap_or(placeholder_texture_view)
+        } else {
+            placeholder_texture_view
+        };
+
         material_bind_groups.push(device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(&format!("material-bind-group-{}", i)),
             layout: bind_group_layout,
@@ -166,6 +182,10 @@ fn build_bindings(
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
+                    resource: wgpu::BindingResource::TextureView(metallic_roughness_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
                     resource: wgpu::BindingResource::Sampler(texture_sampler),
                 },
             ],
@@ -258,6 +278,7 @@ fn build_placeholder_bindings(
         color: [1.0; 4],
         metallic: 0.0,
         roughness: 0.0,
+        metallic_roughness_texture: None,
         albedo_texture: None,
         normal_texture: None,
         bump: 0.0,
@@ -287,6 +308,10 @@ fn build_placeholder_bindings(
             },
             wgpu::BindGroupEntry {
                 binding: 3,
+                resource: wgpu::BindingResource::TextureView(placeholder_texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
                 resource: wgpu::BindingResource::Sampler(texture_sampler),
             },
         ],
