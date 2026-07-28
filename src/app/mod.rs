@@ -7,7 +7,7 @@ pub(crate) use state::*;
 pub(crate) use stats::*;
 use std::collections::VecDeque;
 
-use crate::camera::{Camera, CameraController};
+use crate::camera::{Camera, CameraController, CameraDescriptor};
 use crate::renderer::{Gpu, RenderSettings, Renderer, Viewport};
 use crate::scene::{Model, Scene, load};
 use crate::ui::{EditorCommand, Gui, editor};
@@ -266,7 +266,10 @@ fn handle(event_loop: &ActiveEventLoop, camera: &mut Camera, viewport_rect: egui
             });
         }
         EditorCommand::ResetCamera => {
-            camera.update_aspect_ratio(viewport_rect.size().x, viewport_rect.size().y);
+            *camera = Camera::new(&CameraDescriptor {
+                aspect: viewport_rect.size().x / viewport_rect.size().y,
+                ..CameraDescriptor::default()
+            });
         }
         EditorCommand::Quit => {
             event_loop.exit();
