@@ -65,6 +65,19 @@ Use **File → Load file…** to open a binary glTF (`.glb`) scene. Sample scene
 - **Scroll or pinch:** adjust field of view
 - **View → Reset Camera:** restore the camera projection after resizing
 
+## Features
+
+- Binary glTF loading with node transforms, indexed meshes, base-color, normal and
+  metallic-roughness textures
+- Cook–Torrance physically based shading with metallic-roughness materials
+- Adjustable Blinn–Phong shading with live ambient, diffuse, specular, and shininess controls
+- Directional-light shadow mapping with a resolution slider and percentage-closer filtering
+- Tangent-space normal mapping with per-material scale and a global bump-strength control
+- Color, normal, depth, and hardware line-rasterized wireframe views
+- Per-primitive uniforms, depth testing, back-face culling, and an sRGB render target
+- Scene-tree visibility toggles, grid overlay, background-color picker, frame time, and geometry
+  statistics
+
 ## Credits
 
 The bundled glTF scenes are from the [Khronos glTF Sample Assets](https://github.khronos.org/glTF-Assets/) project.
