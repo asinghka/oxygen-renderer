@@ -1,0 +1,60 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required by actions/deploy-pages, which authenticates via OIDC.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  TRUNK_VERSION: "0.21.14"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # .cargo/config.toml supplies the getrandom wasm_js rustflag.
+      - name: Add the wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Prebuilt binary; `cargo install trunk` would rebuild it on every run.
+      - name: Install trunk
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin" trunk
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Pages serves a project site from /<repo>/, so the asset URLs trunk bakes into
+      # index.html need that prefix. Passed here rather than in a Trunk.toml so that
+      # `trunk serve` keeps working at / during local development.
+      - name: Build
+        run: trunk build --release --public-url "/${{ github.event.repository.name }}/"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
