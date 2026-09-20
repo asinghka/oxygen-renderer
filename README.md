@@ -4,6 +4,9 @@ A real-time [glTF](https://www.khronos.org/gltf/) viewer and renderer built from
 renderer as a small game-engine editor: load a model, inspect its scene graph, fly through the
 viewport, and tune its shading live.
 
+**View in the [browser](https://asinghka.github.io/oxygen-renderer/)**. Compiled to WebAssembly and
+running on WebGPU. Needs a recent web browser.
+
 <p align="center">
   <img src="assets/media/dragon-demo.gif" alt="Oxygen rendering a dragon model">
 </p>
