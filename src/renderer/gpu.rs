@@ -1,4 +1,3 @@
-use pollster::FutureExt;
 use std::sync::Arc;
 use wgpu::{Backends, PowerPreference, TextureUsages};
 use winit::dpi::PhysicalSize;
@@ -9,10 +8,11 @@ pub(crate) struct Gpu {
     pub(crate) queue: wgpu::Queue,
     pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) config: wgpu::SurfaceConfiguration,
+    pub(crate) view_format: wgpu::TextureFormat,
 }
 
 impl Gpu {
-    pub(crate) fn new(window: Arc<Window>) -> Self {
+    pub(crate) async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -31,16 +31,22 @@ impl Gpu {
                 compatible_surface: Some(&surface),
                 ..Default::default()
             })
-            .block_on()
+            .await
             .expect("Failed to create an adapter");
+
+        // POLYGON_MODE_LINE is a native-only feature, so the wireframe pipeline is not built on web
+        #[cfg(not(target_arch = "wasm32"))]
+        let required_features = wgpu::Features::POLYGON_MODE_LINE;
+        #[cfg(target_arch = "wasm32")]
+        let required_features = wgpu::Features::empty();
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("device"),
-                required_features: wgpu::Features::POLYGON_MODE_LINE,
+                required_features,
                 ..Default::default()
             })
-            .block_on()
+            .await
             .expect("Failed to create a device");
 
         let surface_capabilities = surface.get_capabilities(&adapter);
@@ -51,6 +57,9 @@ impl Gpu {
             .copied()
             .unwrap_or(surface_capabilities.formats[0]);
 
+        let view_format = surface_format.add_srgb_suffix();
+        let view_formats = if view_format == surface_format { vec![] } else { vec![view_format] };
+
         let config = wgpu::SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
@@ -59,7 +68,7 @@ impl Gpu {
             present_mode: surface_capabilities.present_modes[0],
             desired_maximum_frame_latency: 2,
             alpha_mode: surface_capabilities.alpha_modes[0],
-            view_formats: vec![],
+            view_formats,
         };
 
         surface.configure(&device, &config);
@@ -69,6 +78,7 @@ impl Gpu {
             queue,
             surface,
             config,
+            view_format,
         }
     }
 

@@ -18,6 +18,8 @@ const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
 pub(crate) struct Renderer {
     render_pipeline: wgpu::RenderPipeline,
+    // PolygonMode::Line is native-only, so there is no wireframe pipeline on web.
+    #[cfg(not(target_arch = "wasm32"))]
     wireframe_pipeline: wgpu::RenderPipeline,
     shadow_map_pipeline: wgpu::RenderPipeline,
     line_pipeline: wgpu::RenderPipeline,
@@ -42,6 +44,7 @@ impl Renderer {
             Some(primitive_bindings.bind_group_layout()),
         ];
 
+        #[cfg(not(target_arch = "wasm32"))]
         let wireframe_bind_group_layouts = &[
             Some(frame_bindings.frame_bind_group_layout()),
             Some(material_bindings.bind_group_layout()),
@@ -55,16 +58,15 @@ impl Renderer {
 
         let grid_bind_group_layouts = &[Some(frame_bindings.frame_bind_group_layout()), Some(grid_bindings.bind_group_layout())];
 
-        let (render_pipeline, wireframe_pipeline, shadow_map_pipeline, line_pipeline) = create_pipelines(
-            &gpu.device,
-            bind_group_layouts,
-            wireframe_bind_group_layouts,
-            grid_bind_group_layouts,
-            shadow_map_bind_group_layouts,
-        );
+        let (render_pipeline, shadow_map_pipeline, line_pipeline) =
+            create_pipelines(&gpu.device, bind_group_layouts, grid_bind_group_layouts, shadow_map_bind_group_layouts);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let wireframe_pipeline = create_wireframe_pipeline(&gpu.device, wireframe_bind_group_layouts);
 
         Self {
             render_pipeline,
+            #[cfg(not(target_arch = "wasm32"))]
             wireframe_pipeline,
             shadow_map_pipeline,
             line_pipeline,
@@ -170,6 +172,7 @@ impl Renderer {
         }
 
         match &settings.render_mode {
+            #[cfg(not(target_arch = "wasm32"))]
             RenderMode::Wireframe => {
                 render_pass.set_pipeline(&self.wireframe_pipeline);
                 for primitive_binding in self.primitive_bindings.visible(invisible) {
@@ -200,16 +203,14 @@ impl Renderer {
 fn create_pipelines(
     device: &wgpu::Device,
     bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
-    wireframe_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
     grid_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
     shadow_map_bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
-) -> (wgpu::RenderPipeline, wgpu::RenderPipeline, wgpu::RenderPipeline, wgpu::RenderPipeline) {
+) -> (wgpu::RenderPipeline, wgpu::RenderPipeline, wgpu::RenderPipeline) {
     let render_pipeline = create_render_pipeline(device, bind_group_layouts);
-    let wireframe_pipeline = create_wireframe_pipeline(device, wireframe_bind_group_layouts);
     let grid_pipeline = create_grid_pipeline(device, grid_bind_group_layouts);
     let shadow_map_pipeline = create_shadow_map_pipeline(device, shadow_map_bind_group_layouts);
 
-    (render_pipeline, wireframe_pipeline, shadow_map_pipeline, grid_pipeline)
+    (render_pipeline, shadow_map_pipeline, grid_pipeline)
 }
 
 fn create_render_pipeline(device: &wgpu::Device, bind_group_layouts: &[Option<&wgpu::BindGroupLayout>]) -> wgpu::RenderPipeline {
@@ -265,6 +266,7 @@ fn create_render_pipeline(device: &wgpu::Device, bind_group_layouts: &[Option<&w
     })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn create_wireframe_pipeline(device: &wgpu::Device, bind_group_layouts: &[Option<&wgpu::BindGroupLayout>]) -> wgpu::RenderPipeline {
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("wireframe-shader"),
@@ -393,7 +395,8 @@ fn create_grid_pipeline(device: &wgpu::Device, bind_group_layouts: &[Option<&wgp
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: None,
             unclipped_depth: false,
-            polygon_mode: wgpu::PolygonMode::Line,
+            // LineList already rasterizes lines; PolygonMode::Line would demand a native-only feature.
+            polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
         depth_stencil: Some(wgpu::DepthStencilState {

@@ -20,7 +20,7 @@ pub(crate) struct CameraDescriptor {
 impl Default for CameraDescriptor {
     fn default() -> Self {
         CameraDescriptor {
-            eye: glam::vec3(0.0, 0.0, 2.0),
+            eye: glam::vec3(0.0, 0.0, 10.0),
             yaw: 0.0,
             pitch: 0.0,
             up: glam::Vec3::Y,

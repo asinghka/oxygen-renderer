@@ -6,9 +6,11 @@ use egui::load::SizedTexture;
 use egui::{Align, Button, CentralPanel, CollapsingHeader, ComboBox, Frame, Layout, Margin, MenuBar, Panel, ScrollArea, Slider, Widget};
 use re_ui::UiExt;
 use std::collections::VecDeque;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 pub(crate) enum EditorCommand {
+    #[cfg(not(target_arch = "wasm32"))]
     LoadFile(PathBuf),
     ResetCamera,
     Quit,
@@ -30,12 +32,14 @@ pub(crate) fn build(
                 ui.set_height(32.0);
 
                 ui.menu_button("File", |ui| {
+                    #[cfg(not(target_arch = "wasm32"))]
                     if ui.button("Load file...").clicked() {
                         if let Some(path) = rfd::FileDialog::new().add_filter("model", &["glb"]).pick_file() {
                             editor_commands.push_back(EditorCommand::LoadFile(path));
                         }
                     }
 
+                    #[cfg(not(target_arch = "wasm32"))]
                     ui.separator();
 
                     if ui.button("Quit").clicked() {
@@ -129,6 +133,7 @@ pub(crate) fn build(
                                 .show_ui(ui, |ui| {
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::BlinnPhong, "Blinn-Phong");
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::PhysicallyBased, "Physically-Based");
+                                    #[cfg(not(target_arch = "wasm32"))]
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::Wireframe, "Wireframe");
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::Depth, "Depth");
                                     ui.selectable_value(&mut settings.render_mode, RenderMode::Normal, "Normal");
@@ -153,7 +158,9 @@ pub(crate) fn build(
                                     Slider::new(&mut settings.shininess, 0.0..=1.0).ui(ui);
                                 }
                                 RenderMode::PhysicallyBased => {}
-                                RenderMode::Wireframe | RenderMode::Depth | RenderMode::Normal => {}
+                                #[cfg(not(target_arch = "wasm32"))]
+                                RenderMode::Wireframe => {}
+                                RenderMode::Depth | RenderMode::Normal => {}
                             }
 
                             ui.add_space(12.0);

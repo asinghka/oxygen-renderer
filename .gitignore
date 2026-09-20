@@ -79,3 +79,5 @@ temp/
 
 # OS-generated files
 Thumbs.db
+# trunk
+dist/
