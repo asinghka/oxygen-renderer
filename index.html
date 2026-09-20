@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Oxygen</title>
+
+    <link data-trunk rel="rust" />
+    <!-- Served next to the wasm so DEFAULT_MODEL_URL can fetch it. Add a line per model. -->
+    <link data-trunk rel="copy-file" href="assets/glTF/pbr_spheres.glb" data-target-path="assets/glTF" />
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #020202;
+      }
+
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+
+  <body></body>
+</html>

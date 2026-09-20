@@ -49,7 +49,7 @@ impl Default for RenderSettings {
             shadow_map_resolution: 4096,
             pcf: 2,
             background: [0.008; 3],
-            render_mode: RenderMode::BlinnPhong,
+            render_mode: RenderMode::PhysicallyBased,
             grid: true,
         }
     }
@@ -78,6 +78,7 @@ impl RenderSettings {
 pub(crate) enum RenderMode {
     BlinnPhong,
     PhysicallyBased,
+    #[cfg(not(target_arch = "wasm32"))]
     Wireframe,
     Depth,
     Normal,

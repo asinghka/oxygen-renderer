@@ -4,9 +4,22 @@ use gltf::buffer::Data;
 use gltf::image::Format;
 use std::collections::HashSet;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn load(path: String) -> Model {
     let (document, buffers, images) = gltf::import(path).expect("Failed to load glTF file");
 
+    build(document, buffers, images)
+}
+
+/// The web build has no filesystem, so this is how models arrive there
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn load_slice(bytes: &[u8]) -> Model {
+    let (document, buffers, images) = gltf::import_slice(bytes).expect("Failed to load glTF file");
+
+    build(document, buffers, images)
+}
+
+fn build(document: gltf::Document, buffers: Vec<Data>, images: Vec<gltf::image::Data>) -> Model {
     let mut scene_nodes = Vec::with_capacity(document.nodes().count());
     let mut root_indices = Vec::new();
 

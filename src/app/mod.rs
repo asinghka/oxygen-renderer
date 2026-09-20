@@ -1,6 +1,8 @@
 mod input;
 mod state;
 mod stats;
+#[cfg(target_arch = "wasm32")]
+mod web;
 
 pub(crate) use input::*;
 pub(crate) use state::*;
@@ -9,25 +11,47 @@ use std::collections::VecDeque;
 
 use crate::camera::{Camera, CameraController, CameraDescriptor};
 use crate::renderer::{Gpu, RenderSettings, Renderer, Viewport};
-use crate::scene::{Model, Scene, load};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::scene::load;
+use crate::scene::{Model, Scene};
+#[cfg(target_arch = "wasm32")]
+use crate::scene::load_slice;
 use crate::ui::{EditorCommand, Gui, editor};
 use std::sync::{Arc, mpsc};
+#[cfg(not(target_arch = "wasm32"))]
 use std::thread;
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 use wgpu::CurrentSurfaceTexture;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
-use winit::event_loop::ActiveEventLoop;
+use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::keyboard::PhysicalKey;
 use winit::window::{CursorGrabMode, Window, WindowId};
 
 const APP_NAME: &str = "Oxygen";
 
+/// The web build has no file dialog, so it fetches one model at startup
+#[cfg(target_arch = "wasm32")]
+const DEFAULT_MODEL_URL: &str = "assets/glTF/pbr_spheres.glb";
+
 const SCROLL_PIXELS_PER_LINE: f32 = 50.0;
 const PINCH_LINES_PER_MAGNIFICATION: f32 = 40.0;
 
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) enum UserEvent {
+    GpuReady,
+}
+
 pub(crate) struct App {
     app_state: Option<AppState>,
+
+    #[cfg(target_arch = "wasm32")]
+    proxy: EventLoopProxy<UserEvent>,
+    #[cfg(target_arch = "wasm32")]
+    pending_gpu: std::rc::Rc<std::cell::RefCell<Option<(Arc<Window>, Gpu)>>>,
 
     scene: Scene,
 
@@ -47,12 +71,19 @@ pub(crate) struct App {
     rx: mpsc::Receiver<Model>,
 }
 
-impl Default for App {
-    fn default() -> Self {
+impl App {
+    pub(crate) fn new(proxy: EventLoopProxy<UserEvent>) -> Self {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = proxy;
+
         let (tx, rx) = mpsc::channel();
 
         Self {
             app_state: None,
+            #[cfg(target_arch = "wasm32")]
+            proxy,
+            #[cfg(target_arch = "wasm32")]
+            pending_gpu: Default::default(),
             scene: Scene::default(),
             camera_controller: CameraController::default(),
             input_state: InputState::default(),
@@ -65,28 +96,84 @@ impl Default for App {
             rx,
         }
     }
-}
 
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = Arc::new(
-            event_loop
-                .create_window(
-                    Window::default_attributes()
-                        .with_title(APP_NAME)
-                        .with_inner_size(winit::dpi::PhysicalSize::new(1600, 900)),
-                )
-                .expect("Failed to create window"),
-        );
-
-        let gpu = Gpu::new(window.clone());
-        let mut gui = Gui::new(&window, &gpu.device, gpu.config.format);
+    fn init(&mut self, window: Arc<Window>, gpu: Gpu) {
+        let mut gui = Gui::new(&window, &gpu.device, gpu.view_format);
         let viewport = Viewport::new(&gpu.device, &mut gui, gpu.config.width, gpu.config.height);
         let renderer = Renderer::new(&gpu, &self.scene.camera, &self.scene.light, &self.render_settings);
 
         self.scene.camera.update_aspect_ratio(viewport.width as f32, viewport.height as f32);
 
         self.app_state = Some(AppState::new(window, gpu, renderer, gui, viewport));
+    }
+}
+
+impl ApplicationHandler<UserEvent> for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.app_state.is_some() {
+            return;
+        }
+
+        let attributes = Window::default_attributes()
+            .with_title(APP_NAME)
+            .with_inner_size(winit::dpi::PhysicalSize::new(1600, 900));
+
+        #[cfg(target_arch = "wasm32")]
+        let attributes = {
+            use winit::platform::web::WindowAttributesExtWebSys;
+            attributes.with_append(true)
+        };
+
+        let window = Arc::new(event_loop.create_window(attributes).expect("Failed to create window"));
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use pollster::FutureExt;
+
+            let gpu = Gpu::new(window.clone()).block_on();
+            self.init(window, gpu);
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let pending_gpu = self.pending_gpu.clone();
+            let proxy = self.proxy.clone();
+            let window = window.clone();
+
+            wasm_bindgen_futures::spawn_local(async move {
+                let gpu = Gpu::new(window.clone()).await;
+
+                *pending_gpu.borrow_mut() = Some((window, gpu));
+                proxy.send_event(UserEvent::GpuReady).ok();
+            });
+
+            // Independent of the device: the model just waits in the channel until a frame drains it.
+            let tx = self.tx.clone();
+
+            wasm_bindgen_futures::spawn_local(async move {
+                match web::fetch_bytes(DEFAULT_MODEL_URL).await {
+                    Ok(bytes) => {
+                        tx.send(load_slice(&bytes)).ok();
+                    }
+                    Err(error) => log::error!("Failed to fetch {DEFAULT_MODEL_URL}: {error:?}"),
+                }
+            });
+        }
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
+        match event {
+            UserEvent::GpuReady => {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let pending = self.pending_gpu.borrow_mut().take();
+
+                    if let Some((window, gpu)) = pending {
+                        self.init(window, gpu);
+                    }
+                }
+            }
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
@@ -149,7 +236,10 @@ impl ApplicationHandler for App {
                     _ => return,
                 };
 
-                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+                    format: Some(app_state.gpu.view_format),
+                    ..Default::default()
+                });
 
                 let mut encoder = app_state.gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
@@ -250,13 +340,18 @@ impl ApplicationHandler for App {
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         if let Some(state) = self.app_state.as_ref() {
+            #[cfg(target_arch = "wasm32")]
+            web::sync_canvas_size(&state.window);
+
             state.window.request_redraw();
         }
     }
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
 fn handle(event_loop: &ActiveEventLoop, camera: &mut Camera, viewport_rect: egui::Rect, cmd: EditorCommand, tx: mpsc::Sender<Model>) {
     match cmd {
+        #[cfg(not(target_arch = "wasm32"))]
         EditorCommand::LoadFile(path) => {
             let path = path.to_string_lossy().to_string();
 
